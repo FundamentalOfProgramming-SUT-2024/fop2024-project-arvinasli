@@ -5,9 +5,9 @@
 #include "library.h"
 
 typedef struct {
-    char email[50];
     char username[50];
     char password[50];
+    char email[50];
     int score;
     int gold;
     int count_games;
@@ -16,11 +16,17 @@ typedef struct {
 
 typedef struct {
     Player player;
+    int difficulty;
+    int player_color;
 } Game;
 
 void login(Player *p);
 void create_account(Player *p);
+void menu_handler(Player p, Game *g);
 int game_menu(Player p);
+void score_board(Player p);
+void settings(Player p, Game *g);
+void profile(Player p);
 
 int main() {
     initscr();
@@ -31,12 +37,11 @@ int main() {
 
     Player p;
     login(&p);
-    Game g;
-    g.player = p;
-    game_menu(p);
-    char ch = getch();
-    
 
+    Game g;
+
+    menu_handler(p,&g);
+    
     endwin();
     return 0;
 }
@@ -70,6 +75,7 @@ void login(Player *p) {
                 if (strcmp(password, line) == 0) {
                     pass_check = 1;
                     strcpy(p->password,password);
+                    fgets(p->email, 50, fptr);
                     fgets(score, 50, fptr); score[strcspn(score, "\n")] = '\0';
                     fgets(gold, 50, fptr); gold[strcspn(gold, "\n")] = '\0';
                     fgets(count_games, 50, fptr); count_games[strcspn(count_games, "\n")] = '\0';
@@ -145,12 +151,12 @@ void create_account(Player *p) {
         getnstr(p->email, 50);
         if(!check_email(p->email)) {
             attron(COLOR_PAIR(2));
-            mvprintw(LINES / 2 - 4, COLS / 2 - 15, "Your email is invalid!");
+            mvprintw(LINES / 2 - 4, COLS / 2 - 15, "Your email is invalid!      ");
             attroff(COLOR_PAIR(2));
         }
         else {
             attron(COLOR_PAIR(3));
-            mvprintw(LINES / 2 - 4, COLS / 2 - 15, "Your email is valid.  ");
+            mvprintw(LINES / 2 - 4, COLS / 2 - 15, "Your email is valid.        ");
             attroff(COLOR_PAIR(3));
         }
     } while (!check_email(p->email));
@@ -167,14 +173,14 @@ void create_account(Player *p) {
             if (strcmp(p->username, line) == 0) {
                 check_username = 0;
                 attron(COLOR_PAIR(2));
-                mvprintw(LINES / 2 - 4, COLS / 2 - 15, "This username exists!");
+                mvprintw(LINES / 2 - 4, COLS / 2 - 15, "This username exists!       ");
                 attroff(COLOR_PAIR(2));
                 break;
             }
         }
         if(check_username) {
             attron(COLOR_PAIR(3));
-            mvprintw(LINES / 2 - 4, COLS / 2 - 15, "This username is valid.");
+            mvprintw(LINES / 2 - 4, COLS / 2 - 15, "This username is valid.     ");
             attroff(COLOR_PAIR(3));
         }   
     } while (!check_username);
@@ -189,7 +195,7 @@ void create_account(Player *p) {
             attroff(COLOR_PAIR(2));
         }
         else {
-            fprintf(fptr, "%s\n", p->email); fprintf(fptr, "%s\n", p->username); fprintf(fptr, "%s\n", p->password);
+            fprintf(fptr, "%s\n", p->username); fprintf(fptr, "%s\n", p->password); fprintf(fptr, "%s\n", p->email);
             p->score = 0;
             p->gold = 0;
             p->count_games = 0;
@@ -199,6 +205,33 @@ void create_account(Player *p) {
     fclose(fptr);
     curs_set(FALSE);
     noecho();
+}
+
+void menu_handler(Player p, Game *g) {
+    switch (game_menu(p)) {
+        case 1:
+            /* code */
+            break;
+        case 2:
+            /* code */
+            break;
+        case 3:
+            score_board(p);
+            menu_handler(p,g);
+            break;
+        case 4:
+            settings(p,g);
+            menu_handler(p,g);
+            break;
+        case 5:
+            profile(p);
+            menu_handler(p,g);
+            break;
+        default:
+            endwin();
+            exit(0);
+            break;
+    }
 }
 
 int game_menu(Player p) {
@@ -231,6 +264,94 @@ int game_menu(Player p) {
     }
 
     return choice+1;
+
+    clear();
+}
+
+void score_board(Player p) {
+    clear();
+    init_pair(1, COLOR_BLACK, COLOR_CYAN);
+
+    attron(COLOR_PAIR(1));
+    mvprintw(1, 1, "SCORE BOARD");
+    attroff(COLOR_PAIR(1));
+    mvprintw(1, 20, "Press any key to RETURN");
+    mvprintw(3, 1, "RANK"); mvprintw(3, 10, "username"); mvprintw(3, 24, "score"); mvprintw(3, 35, "gold"); mvprintw(3, 44, "gamecounts"); mvprintw(3, 58, "exp");
+
+    char ch = getch();
+
+    clear();
+}
+
+void settings(Player p, Game *g) {
+    clear();
+    init_pair(1, COLOR_BLACK, COLOR_CYAN);
+
+    attron(COLOR_PAIR(1));
+    mvprintw(1, 1, "SETTINGS");
+    attroff(COLOR_PAIR(1));
+    mvprintw(1, 20, "Press ENTER after your changes");
+    
+    mvprintw(3, 1, "Difficulty");
+    const char *difficulty[] = {"Easy", "Hard"};
+    g->difficulty = 0;
+    while (1) {
+        for (int i=0; i<2; i++) {
+            if (i == g->difficulty)
+                attron(A_REVERSE);
+            mvprintw(4+i, 1, "%s", difficulty[i]);
+            if (i == g->difficulty)
+                attroff(A_REVERSE);
+        }
+
+        int ch = getch();
+        if (ch == KEY_UP && g->difficulty != 0)
+            g->difficulty--;
+        else if (ch == KEY_DOWN && g->difficulty != 1)
+            g->difficulty++;
+        else if (ch == 10)
+            break;
+    }
+
+    mvprintw(7, 1, "Player's Color:");
+    g->player_color = 0;
+    const char *color[] = {"White", "Blue", "Red", "Green"};
+    while (1) {
+        for (int i=0; i<4; i++) {
+            if (i == g->player_color)
+                attron(A_REVERSE);
+            mvprintw(8+i, 1, "%s", color[i]);
+            if (i == g->player_color)
+                attroff(A_REVERSE);
+        }
+
+        int ch = getch();
+        if (ch == KEY_UP && g->player_color != 0)
+            g->player_color--;
+        else if (ch == KEY_DOWN && g->player_color != 3)
+            g->player_color++;
+        else if (ch == 10)
+            break;
+    }
+
+    clear();
+}
+
+void profile(Player p) {
+    clear();
+    init_pair(1, COLOR_BLACK, COLOR_YELLOW);
+
+    attron(COLOR_PAIR(1));
+    mvprintw(1, 1, "PROFILE");
+    attroff(COLOR_PAIR(1));
+    mvprintw(1, 20, "Press any key to RETURN");
+    mvprintw(3, 1, "username: %s", p.username);
+    mvprintw(4, 1, "email: %s", p.email);
+    mvprintw(5, 1, "score: %d", p.score);
+    mvprintw(6, 1, "gold: %d", p.gold);
+    mvprintw(7, 1, "game counts: %d", p.count_games);
+
+    char ch = getch();
 
     clear();
 }
