@@ -5,6 +5,11 @@
 #include "library.h"
 
 typedef struct {
+    int x;
+    int y;
+} Pos;
+
+typedef struct {
     char username[50];
     char password[50];
     char email[50];
@@ -15,18 +20,31 @@ typedef struct {
 } Player;
 
 typedef struct {
+    Pos room_pos;
+    int room_size_v;
+    int room_size_h;
+
+} Room;
+
+typedef struct {
     Player player;
     int difficulty;
     int player_color;
+    Pos player_pos;
+    Room rooms[6];
+
 } Game;
 
 void login(Player *p);
 void create_account(Player *p);
-void menu_handler(Player p, Game *g);
-int game_menu(Player p);
-void score_board(Player p);
-void settings(Player p, Game *g);
-void profile(Player p);
+void menu_handler(Player *p, Game *g);
+int game_menu(Player *p);
+void score_board(Player *p);
+void settings(Player *p, Game *g);
+void profile(Player *p);
+void game_launcher(Player *p, Game *g);
+void map_builder(Game *g);
+void handle_movement(int ch, Game *g);
 
 int main() {
     initscr();
@@ -35,12 +53,14 @@ int main() {
     keypad(stdscr, TRUE);
     start_color();
 
+    srand(time(NULL));
+
     Player p;
     login(&p);
 
     Game g;
-
-    menu_handler(p,&g);
+    g.difficulty = 0; g.player_color = 0;
+    menu_handler(&p,&g);
     
     endwin();
     return 0;
@@ -207,10 +227,10 @@ void create_account(Player *p) {
     noecho();
 }
 
-void menu_handler(Player p, Game *g) {
+void menu_handler(Player *p, Game *g) {
     switch (game_menu(p)) {
         case 1:
-            /* code */
+            game_launcher(p,g);
             break;
         case 2:
             /* code */
@@ -234,14 +254,14 @@ void menu_handler(Player p, Game *g) {
     }
 }
 
-int game_menu(Player p) {
+int game_menu(Player *p) {
     clear();
     init_pair(1, COLOR_BLACK, COLOR_CYAN);
 
     attron(COLOR_PAIR(1));
     mvprintw(1, 1, "GAME MENU");
     attroff(COLOR_PAIR(1));
-    mvprintw(2, 1, "Welcome %s", p.username);
+    mvprintw(2, 1, "Welcome %s", p->username);
 
     const char *options[] = {"Start a new Game", "Play your last Game", "Scoreboard", "Settings", "Profile"};
     int choice = 0;
@@ -268,7 +288,7 @@ int game_menu(Player p) {
     clear();
 }
 
-void score_board(Player p) {
+void score_board(Player *p) {
     clear();
     init_pair(1, COLOR_BLACK, COLOR_CYAN);
 
@@ -283,7 +303,7 @@ void score_board(Player p) {
     clear();
 }
 
-void settings(Player p, Game *g) {
+void settings(Player *p, Game *g) {
     clear();
     init_pair(1, COLOR_BLACK, COLOR_CYAN);
 
@@ -337,7 +357,7 @@ void settings(Player p, Game *g) {
     clear();
 }
 
-void profile(Player p) {
+void profile(Player *p) {
     clear();
     init_pair(1, COLOR_BLACK, COLOR_YELLOW);
 
@@ -345,13 +365,109 @@ void profile(Player p) {
     mvprintw(1, 1, "PROFILE");
     attroff(COLOR_PAIR(1));
     mvprintw(1, 20, "Press any key to RETURN");
-    mvprintw(3, 1, "username: %s", p.username);
-    mvprintw(4, 1, "email: %s", p.email);
-    mvprintw(5, 1, "score: %d", p.score);
-    mvprintw(6, 1, "gold: %d", p.gold);
-    mvprintw(7, 1, "game counts: %d", p.count_games);
+    mvprintw(3, 1, "username: %s", p->username);
+    mvprintw(4, 1, "email: %s", p->email);
+    mvprintw(5, 1, "score: %d", p->score);
+    mvprintw(6, 1, "gold: %d", p->gold);
+    mvprintw(7, 1, "game counts: %d", p->count_games);
 
     char ch = getch();
 
     clear();
 }
+
+void game_launcher(Player *p, Game *g) {
+    clear();
+    init_pair(0, COLOR_WHITE, COLOR_BLACK);
+    init_pair(1, COLOR_BLUE, COLOR_BLACK);
+    init_pair(2, COLOR_RED, COLOR_BLACK);
+    init_pair(3, COLOR_GREEN, COLOR_BLACK);
+
+    p->count_games++;
+    map_builder(g);
+
+    for(int j=0; j<LINES; j++) {
+        for(int i=0; i<COLS; i++) {
+            for(int k=0; k<6; k++) {
+                if(abs(j-g->rooms[k].room_pos.y) == g->rooms[k].room_size_v && abs(i-g->rooms[k].room_pos.x) <= g->rooms[k].room_size_h) {
+                    mvprintw(j, i, "-");
+                }
+                else if(abs(i-g->rooms[k].room_pos.x) == g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v) {
+                    mvprintw(j, i, "|");
+                }
+                else if(abs(i-g->rooms[k].room_pos.x) < g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v) {
+                    mvprintw(j, i, ".");
+                }
+            }
+        }
+    }
+
+    while(1) {
+        attron(COLOR_PAIR(g->player_color));
+        mvprintw(g->player_pos.y, g->player_pos.x, "@");
+        attroff(COLOR_PAIR(g->player_color));
+        int ch = getch();
+        handle_movement(ch, g);
+    }
+
+    clear();
+}
+
+void map_builder(Game *g) {
+    int index = 0;
+    for(int i=0; i<3; i++) {
+        for(int j=0; j<2; j++) {
+            g->rooms[index].room_size_v = 4 + rand()%3;
+            g->rooms[index].room_size_h = 8 + rand()%4;
+            char ch = mvinch(j, i);
+            while(g->rooms[index].room_pos.x+g->rooms[index].room_size_h>=COLS || g->rooms[index].room_pos.x-g->rooms[index].room_size_h<=0 ||
+             g->rooms[index].room_pos.y+g->rooms[index].room_size_v>=LINES || g->rooms[index].room_pos.y-g->rooms[index].room_size_v<=0 || ch == '.') {
+                g->rooms[index].room_pos.x = rand() % ((COLS/6) + 1) + i*(COLS/3);
+                g->rooms[index].room_pos.y = rand() % ((LINES/4) + 1) + j*(LINES/2);
+             }
+            index++;
+        }
+    }
+    g->player_pos.x = g->rooms[5].room_pos.x;
+    g->player_pos.y = g->rooms[5].room_pos.y;
+
+}
+
+void handle_movement(int ch, Game *g) {
+    mvprintw(g->player_pos.y, g->player_pos.x, ".");
+    switch (ch) {
+        case '8':
+            chtype character = mvinch(g->player_pos.y-1, g->player_pos.x);
+            if (character != '-') { g->player_pos.y--; }
+            break;
+        case '2':
+            character = mvinch(g->player_pos.y+1, g->player_pos.x);
+            if (character != '-') { g->player_pos.y++; }
+            break;
+        case '4':
+            character = mvinch(g->player_pos.y, g->player_pos.x-1);
+            if (character != '|') { g->player_pos.x--; }
+            break;
+        case '6':
+            character = mvinch(g->player_pos.y, g->player_pos.x+1);
+            if (character != '|') { g->player_pos.x++; }
+            break;
+        case '9':
+            character = mvinch(g->player_pos.y-1, g->player_pos.x+1);
+            if (character != '-' && character != '|') { g->player_pos.y--; g->player_pos.x++; }
+            break;
+        case '7':
+            character = mvinch(g->player_pos.y-1, g->player_pos.x-1);
+            if (character != '-' && character != '|') { g->player_pos.y--; g->player_pos.x--; }
+            break;
+        case '3':
+            character = mvinch(g->player_pos.y+1, g->player_pos.x+1);
+            if (character != '-' && character != '|') { g->player_pos.y++; g->player_pos.x++; }
+            break;
+        case '1':
+            character = mvinch(g->player_pos.y+1, g->player_pos.x-1);
+            if (character != '-' && character != '|') { g->player_pos.y++; g->player_pos.x--; }
+            break;
+    }
+}
+
