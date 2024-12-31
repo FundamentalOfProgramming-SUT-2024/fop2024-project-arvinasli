@@ -62,3 +62,16 @@ int check_password(char password[50]) {
     }
     return 0;
 }
+
+int power(int num, int n) {
+    if(n==0) {
+        return 1;
+    }
+    if(n==1) {
+        return num;
+    }
+    for(int i=2; i<=n; i++) {
+        num *= num;
+    }
+    return num;
+}
