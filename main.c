@@ -1,5 +1,4 @@
 #include <ncurses.h>
-#include <locale.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -24,8 +23,7 @@ typedef struct {
     Pos room_pos;
     int room_size_v;
     int room_size_h;
-    int count_doors;
-    Pos *doors;
+    Pos doors[2];
     Pos pillar_seed;
 
 } Room;
@@ -51,6 +49,7 @@ void game_launcher(Player *p, Game *g);
 void map_builder(Game *g);
 void handle_movement(int ch, Game *g);
 void display_health(Game *g);
+void corridor_path(char direction, Pos door1, Pos door2);
 
 int main() {
     initscr();
@@ -58,7 +57,6 @@ int main() {
     curs_set(FALSE);
     keypad(stdscr, TRUE);
     start_color();
-    setlocale(LC_CTYPE, "");
 
     srand(time(NULL));
 
@@ -420,20 +418,73 @@ void game_launcher(Player *p, Game *g) {
     for(int k=0; k<6; k++) {
         g->rooms[k].pillar_seed.x = g->rooms[k].room_pos.x + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_h-3));
         g->rooms[k].pillar_seed.y = g->rooms[k].room_pos.y + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_v-3));
-        g->rooms[k].count_doors = 1 + rand()%2;
     }
     for(int k=0; k<6; k++) {
-        int c=0;
+        int d1=1; int d2=1;
         for(int j=0; j<LINES; j++) {
             for(int i=0; i<COLS; i++) {
-                if(abs(j-g->rooms[k].room_pos.y) == g->rooms[k].room_size_v && abs(i-g->rooms[k].room_pos.x) <= g->rooms[k].room_size_h && rand()%g->rooms[k].room_size_h==5 && c<g->rooms[k].count_doors) {
-                    mvprintw(j, i, "+");
-                    c++;
+                if(k == 0) {
+                    if(j-g->rooms[k].room_pos.y == g->rooms[k].room_size_v && abs(i-g->rooms[k].room_pos.x) <= g->rooms[k].room_size_h && d1) {
+                        int new_i = i+rand()%g->rooms[k].room_size_h;
+                        mvprintw(j, new_i, "+"); d1 = 0;
+                        g->rooms[k].doors[1].x = new_i; g->rooms[k].doors[1].y = j;
+                    }
+                    else if(i-g->rooms[k].room_pos.x == g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v && d2) {
+                        int new_j = j+rand()%g->rooms[k].room_size_v;
+                        mvprintw(new_j, i, "+"); d2 = 0;
+                        g->rooms[k].doors[0].x = i; g->rooms[k].doors[0].y = new_j;
+                    }
                 }
-                else if(abs(i-g->rooms[k].room_pos.x) == g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v && rand()%g->rooms[k].room_size_v==3 && c<g->rooms[k].count_doors) {
-                    mvprintw(j, i, "+");
-                    c++;
+                else if(k == 1) {
+                    if(g->rooms[k].room_pos.y-j == g->rooms[k].room_size_v && abs(i-g->rooms[k].room_pos.x) <= g->rooms[k].room_size_h && d1) {
+                        int new_i = i+rand()%g->rooms[k].room_size_h;
+                        mvprintw(j, new_i, "+"); d1 = 0;
+                        g->rooms[k].doors[0].x = new_i; g->rooms[k].doors[0].y = j;
+                    }
+                    else if(i-g->rooms[k].room_pos.x == g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v && d2) {
+                        int new_j = j+rand()%g->rooms[k].room_size_v;
+                        mvprintw(new_j, i, "+"); d2 = 0;
+                        g->rooms[k].doors[1].x = i; g->rooms[k].doors[1].y = new_j;
+                    }
                 }
+                else if(k == 2 || k == 3) {
+                    if(g->rooms[k].room_pos.x-i == g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v && d1) {
+                        int new_j = j+1;
+                        mvprintw(new_j, i, "+"); d1 = 0;
+                        g->rooms[k].doors[0].x = i; g->rooms[k].doors[0].y = new_j;
+                    }
+                    else if(i-g->rooms[k].room_pos.x == g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v && d2) {
+                        int new_j = j+rand()%g->rooms[k].room_size_v;
+                        mvprintw(new_j, i, "+"); d2 = 0;
+                        g->rooms[k].doors[1].x = i; g->rooms[k].doors[1].y = new_j;
+                    }
+                }
+                else if(k == 4) {
+                    if(j-g->rooms[k].room_pos.y == g->rooms[k].room_size_v && abs(i-g->rooms[k].room_pos.x) <= g->rooms[k].room_size_h && d1) {
+                        int new_i = i+rand()%g->rooms[k].room_size_h;
+                        mvprintw(j, new_i, "+"); d1 = 0;
+                        g->rooms[k].doors[1].x = new_i; g->rooms[k].doors[1].y = j;
+                    }
+                    else if(g->rooms[k].room_pos.x-i == g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v && d2) {
+                        int new_j = j+rand()%g->rooms[k].room_size_v;
+                        mvprintw(new_j, i, "+"); d2 = 0;
+                        g->rooms[k].doors[0].x = i; g->rooms[k].doors[0].y = new_j;
+                    }
+                }
+                else if(k == 5) {
+                    if(g->rooms[k].room_pos.y-j == g->rooms[k].room_size_v && abs(i-g->rooms[k].room_pos.x) <= g->rooms[k].room_size_h && d1) {
+                        int new_i = i+rand()%g->rooms[k].room_size_h;
+                        mvprintw(j, new_i, "+"); d1 = 0;
+                        g->rooms[k].doors[0].x = new_i; g->rooms[k].doors[0].y = j;
+                    }
+                    else if(g->rooms[k].room_pos.x-i == g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v && d2) {
+                        int new_j = j+rand()%g->rooms[k].room_size_v;
+                        mvprintw(new_j, i, "+"); d2 = 0;
+                        g->rooms[k].doors[1].x = i; g->rooms[k].doors[1].y = new_j;
+                    }
+                }
+
+
                 if(i==g->rooms[k].pillar_seed.x && j==g->rooms[k].pillar_seed.y) {
                     if(rand()%2) {
                         mvprintw(j, i, "O"); mvprintw(j, i-1, "O"); mvprintw(j, i-2, "O"); mvprintw(j, i+1, "O"); mvprintw(j, i+2, "O");
@@ -445,6 +496,16 @@ void game_launcher(Player *p, Game *g) {
             }
         }
     }
+
+    corridor_path('v',g->rooms[0].doors[1],g->rooms[1].doors[0]);
+    corridor_path('h',g->rooms[0].doors[0],g->rooms[2].doors[0]);
+    corridor_path('h',g->rooms[2].doors[1],g->rooms[4].doors[0]);
+    corridor_path('h',g->rooms[1].doors[1],g->rooms[3].doors[0]);
+    corridor_path('h',g->rooms[3].doors[1],g->rooms[5].doors[1]);
+    corridor_path('v',g->rooms[4].doors[1],g->rooms[5].doors[0]);
+
+
+
 
     while(1) {
         attron(COLOR_PAIR(g->player_color));
@@ -480,52 +541,114 @@ void map_builder(Game *g) {
 }
 
 void handle_movement(int ch, Game *g) {
-    mvprintw(g->player_pos.y, g->player_pos.x, ".");
+    int count_dots = 0;
+    chtype character = mvinch(g->player_pos.y-1, g->player_pos.x); if(character == '.') {count_dots++;}
+    character = mvinch(g->player_pos.y+1, g->player_pos.x); if(character == '.') {count_dots++;}
+    character = mvinch(g->player_pos.y, g->player_pos.x-1); if(character == '.') {count_dots++;}
+    character = mvinch(g->player_pos.y, g->player_pos.x+1); if(character == '.') {count_dots++;}
+    if(count_dots >= 2) {
+        mvprintw(g->player_pos.y, g->player_pos.x, ".");
+    }
+    else if(count_dots == 1) {
+        mvprintw(g->player_pos.y, g->player_pos.x, "+");
+    }
+    else {
+        mvprintw(g->player_pos.y, g->player_pos.x, "#");
+    }
+
+
     switch (ch) {
         case '8':
-            chtype character = mvinch(g->player_pos.y-1, g->player_pos.x);
-            if (character != '-' && character != 'O') { g->player_pos.y--; }
+            character = mvinch(g->player_pos.y-1, g->player_pos.x);
+            if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; }
             break;
         case '2':
             character = mvinch(g->player_pos.y+1, g->player_pos.x);
-            if (character != '-' && character != 'O') { g->player_pos.y++; }
+            if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; }
             break;
         case '4':
             character = mvinch(g->player_pos.y, g->player_pos.x-1);
-            if (character != '|' && character != 'O') { g->player_pos.x--; }
+            if (character == '.' || character == '+' || character == '#') { g->player_pos.x--; }
             break;
         case '6':
             character = mvinch(g->player_pos.y, g->player_pos.x+1);
-            if (character != '|' && character != 'O') { g->player_pos.x++; }
+            if (character == '.' || character == '+' || character == '#') { g->player_pos.x++; }
             break;
         case '9':
             character = mvinch(g->player_pos.y-1, g->player_pos.x+1);
-            if (character != '-' && character != '|' && character != 'O') { g->player_pos.y--; g->player_pos.x++; }
+            if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; g->player_pos.x++; }
             break;
         case '7':
             character = mvinch(g->player_pos.y-1, g->player_pos.x-1);
-            if (character != '-' && character != '|' && character != 'O') { g->player_pos.y--; g->player_pos.x--; }
+            if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; g->player_pos.x--; }
             break;
         case '3':
             character = mvinch(g->player_pos.y+1, g->player_pos.x+1);
-            if (character != '-' && character != '|' && character != 'O') { g->player_pos.y++; g->player_pos.x++; }
+            if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; g->player_pos.x++; }
             break;
         case '1':
             character = mvinch(g->player_pos.y+1, g->player_pos.x-1);
-            if (character != '-' && character != '|' && character != 'O') { g->player_pos.y++; g->player_pos.x--; }
+            if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; g->player_pos.x--; }
             break;
     }
 }
 
 void display_health(Game *g) {
-
-    mvprintw(0, COLS-g->MAX_health-10, "Health: ");
-    mvprintw(0, COLS-g->MAX_health-2, "[");
+    mvprintw(0, COLS-2*g->MAX_health-10, "Health: ");
+    mvprintw(0, COLS-2*g->MAX_health-2, "[");
     int count_hearts = g->players_health;
+    attron(COLOR_PAIR(2));
     while(count_hearts) {
-        mvprintw(0, COLS-count_hearts-1, "\u2665");
+        mvprintw(0, COLS-2*count_hearts-1, "<3");
         count_hearts--;
     }
+    attroff(COLOR_PAIR(2));
     mvprintw(0, COLS-1, "]");
 
+}
+
+void corridor_path(char direction, Pos door1, Pos door2) {
+    if(direction == 'v') {
+        int num = 1 + rand()%(door2.y-door1.y-1);
+        int j=1;
+        for(j; j<=num; j++) {
+            mvprintw(door1.y+j,door1.x,"#");
+        }
+        j--;
+        if(door1.x>door2.x) {
+            for(int i=1; i<door1.x-door2.x; i++) {
+                mvprintw(door1.y+j,door1.x-i,"#");
+            }
+        }
+        else {
+            for(int i=1; i<door2.x-door1.x; i++) {
+                mvprintw(door1.y+j,door1.x+i,"#");
+            }
+        }
+        for(j; j<door2.y-door1.y; j++) {
+            mvprintw(door1.y+j,door2.x,"#");
+        }
+    }
+    else if(direction == 'h') {
+        int num = 1 + rand()%(door2.x-door1.x-1);
+        int i=1;
+        for(i; i<=num; i++) {
+            mvprintw(door1.y,door1.x+i,"#");
+        }
+        i--;
+        if(door1.y>door2.y) {
+            for(int j=1; j<door1.y-door2.y; j++) {
+                mvprintw(door1.y-j,door1.x+i,"#");
+            }
+        }
+        else {
+            for(int j=1; j<door2.y-door1.y; j++) {
+                mvprintw(door1.y+j,door1.x+i,"#");
+            }
+        }
+        for(i; i<door2.x-door1.x; i++) {
+            mvprintw(door2.y,door1.x+i,"#");
+        }
+    }
+  
 }
