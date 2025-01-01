@@ -304,6 +304,41 @@ void score_board(Player *p) {
     mvprintw(1, 20, "Press any key to RETURN");
     mvprintw(3, 1, "RANK"); mvprintw(3, 10, "username"); mvprintw(3, 24, "score"); mvprintw(3, 35, "gold"); mvprintw(3, 44, "gamecounts"); mvprintw(3, 58, "exp");
 
+    char usernames[50][50]; int scores[50]; int golds[50]; int game_counts[50]; int exps[50] = {0};
+    FILE *fptr;
+    fptr = fopen("accounts.txt","r");
+    char line[50]; int i = 0; int count = 0;
+    while(fgets(line, 50, fptr) != NULL) {
+        line[strcspn(line,"\n")] = '\0';
+        if(i%6 == 0) {
+            if(i != 0) {
+                count++;
+            }
+            strcpy(usernames[count],line);
+        }
+        else if(i%6 == 3) {
+            scores[count] = str_to_num(line);
+        }
+        else if(i%6 == 4) {
+            golds[count] = str_to_num(line);
+        }
+        else if(i%6 == 5) {
+            game_counts[count] = str_to_num(line);
+        }
+        i++;
+    }
+    fclose(fptr);
+
+    for(int i=0; i<=count; i++) {
+        if(strcmp(p->username,usernames[i]) == 0) {
+            mvprintw(5+i, 1, "-> %d", i+1); mvprintw(5+i, 10, "%s", usernames[i]); mvprintw(5+i, 24, "%d", scores[i]); mvprintw(5+i, 35, "%d", golds[i]); mvprintw(5+i, 44, "%d", game_counts[i]); mvprintw(5+i, 58, "%d", exps[i]);
+        }
+        else {
+            mvprintw(5+i, 1, "%d", i+1); mvprintw(5+i, 10, "%s", usernames[i]); mvprintw(5+i, 24, "%d", scores[i]); mvprintw(5+i, 35, "%d", golds[i]); mvprintw(5+i, 44, "%d", game_counts[i]); mvprintw(5+i, 58, "%d", exps[i]);
+        }
+        
+    }
+
     char ch = getch();
 
     clear();
