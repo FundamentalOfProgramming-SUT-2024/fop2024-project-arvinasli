@@ -47,9 +47,10 @@ void settings(Player *p, Game *g);
 void profile(Player *p);
 void game_launcher(Player *p, Game *g);
 void map_builder(Game *g);
-void handle_movement(int ch, Game *g);
+void handle_movement(int *visited, int ch, Game *g, int *min_i, int *min_j);
 void display_health(Game *g);
 void corridor_path(char direction, Pos door1, Pos door2);
+void display_screen(int *visited, Room *rooms, char **screen, int min_i, int min_j, int max_i, int max_j);
 
 int main() {
     initscr();
@@ -504,16 +505,42 @@ void game_launcher(Player *p, Game *g) {
     corridor_path('h',g->rooms[3].doors[1],g->rooms[5].doors[1]);
     corridor_path('v',g->rooms[4].doors[1],g->rooms[5].doors[0]);
 
+    char **screen = (char **) malloc(COLS*sizeof(char*));
+    for(int i=0; i<COLS; i++) {
+        *(screen+i) = (char *) malloc(LINES*sizeof(char));
+    }
+    for(int j=0; j<LINES; j++) {
+        for(int i=0; i<COLS; i++) {
+            chtype character = mvinch(j,i);
+            screen[i][j] = character;
+        }
+    }
+    clear();
 
-
-
+    int *visited = calloc(6,sizeof(int)); visited[5] = 1;
+    int display_whole = 0; int min_i = g->rooms[5].room_pos.x - g->rooms[5].room_size_h - 2; int min_j = g->rooms[5].room_pos.y - g->rooms[5].room_size_v - 2;
+    display_screen(visited,g->rooms,screen,min_i,min_j,COLS,LINES);
     while(1) {
+        if(display_whole%2 == 1) {
+            for(int j=0; j<LINES; j++) {
+                for(int i=0; i<COLS; i++) {
+                    mvprintw(j,i,"%c",screen[i][j]);
+                }
+            }
+        }
+        else {
+            display_screen(visited,g->rooms,screen,min_i,min_j,COLS,LINES);
+        }
         attron(COLOR_PAIR(g->player_color));
         mvprintw(g->player_pos.y, g->player_pos.x, "@");
         attroff(COLOR_PAIR(g->player_color));
         display_health(g);
         int ch = getch();
-        handle_movement(ch, g);
+        if(ch == 'm') {
+            display_whole++;
+            continue;
+        }
+        handle_movement(visited, ch, g, &min_i, &min_j);
     }
 
     clear();
@@ -540,7 +567,7 @@ void map_builder(Game *g) {
 
 }
 
-void handle_movement(int ch, Game *g) {
+void handle_movement(int *visited, int ch, Game *g, int *min_i, int *min_j) {
     int count_dots = 0;
     chtype character = mvinch(g->player_pos.y-1, g->player_pos.x); if(character == '.') {count_dots++;}
     character = mvinch(g->player_pos.y+1, g->player_pos.x); if(character == '.') {count_dots++;}
@@ -554,7 +581,19 @@ void handle_movement(int ch, Game *g) {
     }
     else {
         mvprintw(g->player_pos.y, g->player_pos.x, "#");
+        if(abs(g->player_pos.x-g->rooms[0].room_pos.x) <= g->rooms[0].room_size_h+2 && abs(g->player_pos.y-g->rooms[0].room_pos.y) <= g->rooms[0].room_size_v+2) {visited[0] = 1; *min_i=min(*min_i,g->rooms[0].room_pos.x-g->rooms[0].room_size_h); *min_j=min(*min_j,g->rooms[0].room_pos.y-g->rooms[0].room_size_v);}
+        else if(abs(g->player_pos.x-g->rooms[1].room_pos.x) <= g->rooms[1].room_size_h+2 && abs(g->player_pos.y-g->rooms[1].room_pos.y) <= g->rooms[1].room_size_v+2) {visited[1] = 1; *min_i=min(*min_i,g->rooms[1].room_pos.x-g->rooms[1].room_size_h); *min_j=min(*min_j,g->rooms[1].room_pos.y-g->rooms[1].room_size_v);}
+        else if(abs(g->player_pos.x-g->rooms[2].room_pos.x) <= g->rooms[2].room_size_h+2 && abs(g->player_pos.y-g->rooms[2].room_pos.y) <= g->rooms[2].room_size_v+2) {visited[2] = 1; *min_i=min(*min_i,g->rooms[2].room_pos.x-g->rooms[2].room_size_h); *min_j=min(*min_j,g->rooms[2].room_pos.y-g->rooms[2].room_size_v);}
+        else if(abs(g->player_pos.x-g->rooms[3].room_pos.x) <= g->rooms[3].room_size_h+2 && abs(g->player_pos.y-g->rooms[3].room_pos.y) <= g->rooms[3].room_size_v+2) {visited[3] = 1; *min_i=min(*min_i,g->rooms[3].room_pos.x-g->rooms[3].room_size_h); *min_j=min(*min_j,g->rooms[3].room_pos.y-g->rooms[3].room_size_v);}
+        else if(abs(g->player_pos.x-g->rooms[4].room_pos.x) <= g->rooms[4].room_size_h+2 && abs(g->player_pos.y-g->rooms[4].room_pos.y) <= g->rooms[4].room_size_v+2) {visited[4] = 1; *min_i=min(*min_i,g->rooms[4].room_pos.x-g->rooms[4].room_size_h); *min_j=min(*min_j,g->rooms[4].room_pos.y-g->rooms[4].room_size_v);}
+        if(ch == '8' && mvinch(g->player_pos.y-1, g->player_pos.x) != ' ') {
+            *min_j -= 1;
+        }
+        else if(ch == '4' && mvinch(g->player_pos.y, g->player_pos.x-1) != ' ') {
+            *min_i -= 1;
+        }
     }
+
 
 
     switch (ch) {
@@ -651,4 +690,24 @@ void corridor_path(char direction, Pos door1, Pos door2) {
         }
     }
   
+}
+
+void display_screen(int *visited, Room *rooms, char **screen, int min_i, int min_j, int max_i, int max_j) {
+    for(int j=0; j<max_j; j++) {
+        for(int i=0; i<max_i; i++) {
+            int k = 0;
+            for(k; k<6; k++) {
+                if(abs(i-rooms[k].room_pos.x) <= rooms[k].room_size_h && abs(j-rooms[k].room_pos.y) <= rooms[k].room_size_v) {
+                    break;
+                }
+            }
+            if(i<min_i || j<min_j || (k!=6 && visited[k] == 0)) {
+                mvprintw(j,i," ");
+            }
+            else {
+                mvprintw(j,i,"%c",screen[i][j]);
+            }
+            
+        }
+    }
 }
