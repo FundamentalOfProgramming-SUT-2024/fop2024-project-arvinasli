@@ -25,7 +25,8 @@ typedef struct {
     int room_size_h;
     Pos doors[2];
     Pos pillar_seed;
-
+    int traps_count;
+    Pos traps[10];
 } Room;
 
 typedef struct {
@@ -49,13 +50,14 @@ void settings(Player *p, Game *g);
 void profile(Player *p);
 void game_launcher(Player *p, Game *g);
 void map_builder(Game *g, int initial_room);
-int handle_movement(int **visited, int ch, Game *g);
+int handle_movement(char **screen, int **visited, int ch, Game *g);
 void display_health(Game *g);
 void corridor_path(char direction, Pos door1, Pos door2);
 void display_screen(int **visited, char **screen);
 void floor_generator(int floor_number, Game *g);
 int check_room(Room *rooms, int i, int j);
 void display_message(char message[], int floor, int score, int gold);
+int check_trap(Room *rooms, int i, int j);
 
 int main() {
     initscr();
@@ -492,7 +494,11 @@ void floor_generator(int floor_number, Game *g) {
         map_builder(g,check_room(g->rooms,g->player_pos.x,g->player_pos.y));
     }
 
-
+    for(int k=0; k<6; k++) {
+        g->rooms[k].pillar_seed.x = g->rooms[k].room_pos.x + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_h-3));
+        g->rooms[k].pillar_seed.y = g->rooms[k].room_pos.y + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_v-3));
+        g->rooms[k].traps_count = 1+rand()%3;
+    }
 
     for(int j=1; j<LINES; j++) {
         for(int i=0; i<COLS; i++) {
@@ -510,13 +516,9 @@ void floor_generator(int floor_number, Game *g) {
         }
     }
 
-    for(int k=0; k<6; k++) {
-        g->rooms[k].pillar_seed.x = g->rooms[k].room_pos.x + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_h-3));
-        g->rooms[k].pillar_seed.y = g->rooms[k].room_pos.y + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_v-3));
-    }
     int k1 = rand()%6; int k2 = rand()%6;
     for(int k=0; k<6; k++) {
-        int d1=1; int d2=1; int stairs = 0;
+        int d1=1; int d2=1; int stairs = 0; int trap = 0;
         for(int j=1; j<LINES; j++) {
             for(int i=0; i<COLS; i++) {
                 if(k == 0) {
@@ -599,6 +601,10 @@ void floor_generator(int floor_number, Game *g) {
                             }
                         }
                     }
+                    if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && trap<g->rooms[k].traps_count) {
+                        g->rooms[k].traps[trap].x = i; g->rooms[k].traps[trap].y = j;
+                        trap++;
+                    }
                 }
             }
         }
@@ -642,6 +648,12 @@ void floor_generator(int floor_number, Game *g) {
         if(display_whole%2 == 1) {
             for(int j=1; j<LINES; j++) {
                 for(int i=0; i<COLS; i++) {
+                    if(screen[i][j] == '^') {
+                        attron(COLOR_PAIR(2));
+                        mvprintw(j,i,"%c",screen[i][j]);
+                        attroff(COLOR_PAIR(2));
+                        continue;
+                    }
                     mvprintw(j,i,"%c",screen[i][j]);
                 }
             }
@@ -658,7 +670,7 @@ void floor_generator(int floor_number, Game *g) {
             display_whole++;
             continue;
         }
-        switch(handle_movement(visited, ch, g)) {
+        switch(handle_movement(screen, visited, ch, g)) {
             case 1:
                 floor_generator(floor_number+1, g);
                 break;
@@ -691,7 +703,7 @@ void map_builder(Game *g, int initial_room) {
 
 }
 
-int handle_movement(int **visited, int ch, Game *g) {
+int handle_movement(char **screen, int **visited, int ch, Game *g) {
     int count_dots = 0;
     chtype character = mvinch(g->player_pos.y-1, g->player_pos.x); if(character == '.') {count_dots++;}
     character = mvinch(g->player_pos.y+1, g->player_pos.x); if(character == '.') {count_dots++;}
@@ -783,41 +795,49 @@ int handle_movement(int **visited, int ch, Game *g) {
         case '8':
             character = mvinch(g->player_pos.y-1, g->player_pos.x);
             if(character == '<') { return 1; }
+            if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y-1)) { screen[g->player_pos.x][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; }
             break;
         case '2':
             character = mvinch(g->player_pos.y+1, g->player_pos.x);
             if(character == '<') { return 1; }
+            if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y+1)) { screen[g->player_pos.x][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; }
             break;
         case '4':
             character = mvinch(g->player_pos.y, g->player_pos.x-1);
             if(character == '<') { return 1; }
+            if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y)) { screen[g->player_pos.x-1][g->player_pos.y]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.x--; }
             break;
         case '6':
             character = mvinch(g->player_pos.y, g->player_pos.x+1);
             if(character == '<') { return 1; }
+            if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y)) { screen[g->player_pos.x+1][g->player_pos.y]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.x++; }
             break;
         case '9':
             character = mvinch(g->player_pos.y-1, g->player_pos.x+1);
             if(character == '<') { return 1; }
+            if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y-1)) { screen[g->player_pos.x+1][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; g->player_pos.x++; }
             break;
         case '7':
             character = mvinch(g->player_pos.y-1, g->player_pos.x-1);
             if(character == '<') { return 1; }
+            if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y-1)) { screen[g->player_pos.x-1][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; g->player_pos.x--; }
             break;
         case '3':
             character = mvinch(g->player_pos.y+1, g->player_pos.x+1);
             if(character == '<') { return 1; }
+            if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y+1)) { screen[g->player_pos.x+1][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; g->player_pos.x++; }
             break;
         case '1':
             character = mvinch(g->player_pos.y+1, g->player_pos.x-1);
             if(character == '<') { return 1; }
+            if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y+1)) { screen[g->player_pos.x-1][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; g->player_pos.x--; }
             break;
         case 'f':
@@ -856,13 +876,13 @@ int handle_movement(int **visited, int ch, Game *g) {
 }
 
 void display_health(Game *g) {
+    mvprintw(0, COLS-2*g->MAX_health-10, "                              ");
     mvprintw(0, COLS-2*g->MAX_health-10, "Health: ");
     mvprintw(0, COLS-2*g->MAX_health-2, "[");
     int count_hearts = g->players_health;
     attron(COLOR_PAIR(2));
-    while(count_hearts) {
-        mvprintw(0, COLS-2*count_hearts-1, "<3");
-        count_hearts--;
+    for(int i=0; i<count_hearts; i++) {
+        mvprintw(0, COLS-2*g->MAX_health-1+2*i, "<3");
     }
     attroff(COLOR_PAIR(2));
     mvprintw(0, COLS-1, "]");
@@ -919,6 +939,12 @@ void display_screen(int **visited, char **screen) {
     for(int j=1; j<LINES; j++) {
         for(int i=0; i<COLS; i++) {
             if(visited[i][j]) {
+                if(screen[i][j] == '^') {
+                    attron(COLOR_PAIR(2));
+                    mvprintw(j,i,"%c",screen[i][j]);
+                    attroff(COLOR_PAIR(2));
+                    continue;
+                }
                 mvprintw(j,i,"%c",screen[i][j]);
             }
             else {
@@ -938,4 +964,15 @@ int check_room(Room *rooms, int i, int j) {
 
 void display_message(char message[], int floor, int score, int gold) {
     mvprintw(0,0,"%s FLOOR:%d   SCORE:%d    GOLD:%d", message, floor, score, gold);
+}
+
+int check_trap(Room *rooms, int i, int j) {
+    for(int k=0; k<6; k++) {
+        for(int l=0; l<rooms[k].traps_count; l++) {
+            if(i == rooms[k].traps[l].x && j == rooms[k].traps[l].y) {
+                return 1;
+            }
+        }
+    }
+    return 0;
 }
