@@ -75,3 +75,29 @@ int power(int num, int n) {
     }
     return num;
 }
+
+int min(int a, int b) {
+    if(a < b) {
+        return a;
+    }
+    return b;
+}
+
+int max(int a, int b) {
+    if(a > b) {
+        return a;
+    }
+    return b;
+}
+
+void sort(int *arr, int scores[], int size) {
+    for(int i=0; i<size-1; i++) {
+        for(int j=i+1; j<size; j++) {
+            if(scores[i] < scores[j]) {
+                int temp = *(arr+i);
+                *(arr+i) = *(arr+j);
+                *(arr+j) = temp;
+            }
+        }
+    }
+}

@@ -147,9 +147,11 @@ void login(Player *p) {
         case 0:
             create_account(p);
             login(p);
+            break;
         case 1:
             endwin();
             exit(0);
+            break;
         }
     }
     clear();
@@ -169,7 +171,6 @@ void create_account(Player *p) {
     attroff(COLOR_PAIR(1));
 
     FILE *fptr;
-    fptr = fopen("accounts.txt", "a");
 
     do {
         mvprintw(LINES / 2 - 2, COLS / 2 - 15, "Enter your email: ");
@@ -189,6 +190,7 @@ void create_account(Player *p) {
 
     int check_username;
     do {
+        fptr = fopen("accounts.txt", "r");
         check_username = 1;
         mvprintw(LINES / 2 - 1, COLS / 2 - 15, "Choose your username: ");
         clrtobot();
@@ -208,7 +210,8 @@ void create_account(Player *p) {
             attron(COLOR_PAIR(3));
             mvprintw(LINES / 2 - 4, COLS / 2 - 15, "This username is valid.     ");
             attroff(COLOR_PAIR(3));
-        }   
+        }
+        fclose(fptr); 
     } while (!check_username);
 
     do {
@@ -221,14 +224,16 @@ void create_account(Player *p) {
             attroff(COLOR_PAIR(2));
         }
         else {
+            fptr = fopen("accounts.txt", "a");
             fprintf(fptr, "%s\n", p->username); fprintf(fptr, "%s\n", p->password); fprintf(fptr, "%s\n", p->email);
             p->score = 0;
             p->gold = 0;
             p->count_games = 0;
             fprintf(fptr, "%d\n", p->score); fprintf(fptr, "%d\n", p->gold); fprintf(fptr, "%d\n", p->count_games);
+            fclose(fptr);
         }
     } while (!check_password(p->password));
-    fclose(fptr);
+    
     curs_set(FALSE);
     noecho();
 }
@@ -297,6 +302,8 @@ int game_menu(Player *p) {
 void score_board(Player *p) {
     clear();
     init_pair(1, COLOR_BLACK, COLOR_CYAN);
+    init_pair(2, COLOR_YELLOW, COLOR_BLACK);
+    init_pair(3, COLOR_MAGENTA, COLOR_BLACK);
 
     attron(COLOR_PAIR(1));
     mvprintw(1, 1, "SCORE BOARD");
@@ -304,7 +311,10 @@ void score_board(Player *p) {
     mvprintw(1, 20, "Press any key to RETURN");
     mvprintw(3, 1, "RANK"); mvprintw(3, 10, "username"); mvprintw(3, 24, "score"); mvprintw(3, 35, "gold"); mvprintw(3, 44, "gamecounts"); mvprintw(3, 58, "exp");
 
-    char usernames[50][50]; int scores[50]; int golds[50]; int game_counts[50]; int exps[50] = {0};
+    char usernames[10][50]; int scores[10]; int golds[10]; int game_counts[10]; int exps[10] = {0};
+    int arr[] = {0,1,2,3,4,5,6,7,8,9};
+    int *ptr_arr = arr;
+
     FILE *fptr;
     fptr = fopen("accounts.txt","r");
     char line[50]; int i = 0; int count = 0;
@@ -329,12 +339,28 @@ void score_board(Player *p) {
     }
     fclose(fptr);
 
+    sort(ptr_arr, scores, (count%10)+1);
+    attron(COLOR_PAIR(2));
+    mvprintw(4, 76, "  .__.");
+    mvprintw(5, 76, " (|  |)");
+    mvprintw(6, 76, "  (  )");
+    mvprintw(7, 76, "  _)(_");
+    attroff(COLOR_PAIR(2));
     for(int i=0; i<=count; i++) {
-        if(strcmp(p->username,usernames[i]) == 0) {
-            mvprintw(5+i, 1, "-> %d", i+1); mvprintw(5+i, 10, "%s", usernames[i]); mvprintw(5+i, 24, "%d", scores[i]); mvprintw(5+i, 35, "%d", golds[i]); mvprintw(5+i, 44, "%d", game_counts[i]); mvprintw(5+i, 58, "%d", exps[i]);
+        if(0<=i && i<=2) {
+            attron(COLOR_PAIR(3));
+            mvprintw(5+i, 66, "LEGEND");
+            attroff(COLOR_PAIR(3));
+            attron(COLOR_PAIR(2));
+        }
+        else{
+            attroff(COLOR_PAIR(2));
+        }
+        if(strcmp(p->username,usernames[arr[i]]) == 0) {
+            mvprintw(5+i, 1, "-> %d", i+1); mvprintw(5+i, 10, "%s", usernames[arr[i]]); mvprintw(5+i, 24, "%d", scores[arr[i]]); mvprintw(5+i, 35, "%d", golds[arr[i]]); mvprintw(5+i, 44, "%d", game_counts[arr[i]]); mvprintw(5+i, 58, "%d", exps[arr[i]]);
         }
         else {
-            mvprintw(5+i, 1, "%d", i+1); mvprintw(5+i, 10, "%s", usernames[i]); mvprintw(5+i, 24, "%d", scores[i]); mvprintw(5+i, 35, "%d", golds[i]); mvprintw(5+i, 44, "%d", game_counts[i]); mvprintw(5+i, 58, "%d", exps[i]);
+            mvprintw(5+i, 1, "%d", i+1); mvprintw(5+i, 10, "%s", usernames[arr[i]]); mvprintw(5+i, 24, "%d", scores[arr[i]]); mvprintw(5+i, 35, "%d", golds[arr[i]]); mvprintw(5+i, 44, "%d", game_counts[arr[i]]); mvprintw(5+i, 58, "%d", exps[arr[i]]);
         }
         
     }
