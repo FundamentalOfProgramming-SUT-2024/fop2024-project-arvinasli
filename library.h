@@ -101,3 +101,11 @@ void sort(int *arr, int scores[], int size) {
         }
     }
 }
+
+const char *txt_format(char username[]) {
+    char *file_name = (char *) malloc(50*sizeof(char));
+    strcpy(file_name,username);
+    file_name[strlen(username)] = '.'; file_name[strlen(username)+1] = 't';
+    file_name[strlen(username)+2] = 'x'; file_name[strlen(username)+3] = 't'; file_name[strlen(username)+4] = 0;
+    return file_name;
+}

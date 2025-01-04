@@ -39,6 +39,7 @@ typedef struct {
     int players_health;
     int players_score;
     int players_gold;
+    int floor_number;
 } Game;
 
 void login(Player *p);
@@ -53,11 +54,16 @@ void map_builder(Game *g, int initial_room);
 int handle_movement(char **screen, int **visited, int ch, Game *g);
 void display_health(Game *g);
 void corridor_path(char direction, Pos door1, Pos door2);
-void display_screen(int **visited, char **screen);
-void floor_generator(int floor_number, Game *g);
+void display_screen(char mode[], int **visited, char **screen);
+void floor_generator(Player *p, Game *g);
 int check_room(Room *rooms, int i, int j);
 void display_message(char message[], int floor, int score, int gold);
 int check_trap(Room *rooms, int i, int j);
+void terminate_game(Player *p, Game *g);
+void exit_screen(Player *p);
+void save_game(Player *p, Game *g, char **screen);
+void save_screen();
+void not_saved_screen();
 
 int main() {
     initscr();
@@ -251,7 +257,14 @@ void menu_handler(Player *p, Game *g) {
             game_launcher(p,g);
             break;
         case 2:
-            /* code */
+            FILE *last_saved_game = fopen(txt_format(p->username),"r");
+            if(last_saved_game) {
+                menu_handler(p,g);
+            }
+            else {
+                not_saved_screen();
+                menu_handler(p,g);
+            }
             break;
         case 3:
             score_board(p);
@@ -281,7 +294,7 @@ int game_menu(Player *p) {
     attroff(COLOR_PAIR(1));
     mvprintw(2, 1, "Welcome %s", p->username);
 
-    const char *options[] = {"Start a new Game", "Play your last Game", "Scoreboard", "Settings", "Profile"};
+    const char *options[] = {"Start a new Game", "Play your last Game (Press Q in the game to save it as the last game you played)", "Scoreboard", "Settings", "Profile"};
     int choice = 0;
     while (1) {
         for (int i=0; i<5; i++) {
@@ -466,30 +479,31 @@ void game_launcher(Player *p, Game *g) {
     g->players_health = g->MAX_health;
     g->players_score = 0;
     g->players_gold = 0;
+    g->floor_number = 1;
     p->count_games++;
 
-    floor_generator(1, g);
+    floor_generator(p, g);
     
 
     clear();
 }
 
-void floor_generator(int floor_number, Game *g) {
+void floor_generator(Player *p, Game *g) {
     clear();
 
-    if(floor_number == 1) {
+    if(g->floor_number == 1) {
 
         map_builder(g,6);
     }
-    else if(floor_number == 2) {
+    else if(g->floor_number == 2) {
 
         map_builder(g,check_room(g->rooms,g->player_pos.x,g->player_pos.y));
     }
-    else if(floor_number == 3) {
+    else if(g->floor_number == 3) {
 
         map_builder(g,check_room(g->rooms,g->player_pos.x,g->player_pos.y));
     }
-    else if(floor_number == 4) {
+    else if(g->floor_number == 4) {
 
         map_builder(g,check_room(g->rooms,g->player_pos.x,g->player_pos.y));
     }
@@ -593,7 +607,7 @@ void floor_generator(int floor_number, Game *g) {
                 
                 
                 if(abs(i-g->rooms[k].room_pos.x) < g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v) {
-                    if(floor_number != 4) {
+                    if(g->floor_number != 4) {
                         if(k == k1 || k == k2) {
                             if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && stairs<1) {
                                 mvprintw(j, i, "<");
@@ -641,42 +655,39 @@ void floor_generator(int floor_number, Game *g) {
     }
 
     int display_whole = 0;
-    display_screen(visited,screen);
+    display_screen("hidden",visited,screen);
     while(1) {
-        display_message("Welcome to the game!", floor_number, g->players_score, g->players_gold);
+        display_message("Welcome to the game!", g->floor_number, g->players_score, g->players_gold);
         display_health(g);
+        if(g->players_health == 0) {
+            terminate_game(p, g);
+        }
         if(display_whole%2 == 1) {
-            for(int j=1; j<LINES; j++) {
-                for(int i=0; i<COLS; i++) {
-                    if(screen[i][j] == '^') {
-                        attron(COLOR_PAIR(2));
-                        mvprintw(j,i,"%c",screen[i][j]);
-                        attroff(COLOR_PAIR(2));
-                        continue;
-                    }
-                    mvprintw(j,i,"%c",screen[i][j]);
-                }
-            }
+            display_screen("view",visited,screen);
         }
         else {
-            display_screen(visited,screen);
+            display_screen("hidden",visited,screen);
         }
         attron(COLOR_PAIR(g->player_color));
         mvprintw(g->player_pos.y, g->player_pos.x, "@");
         attroff(COLOR_PAIR(g->player_color));
 
         int ch = getch();
-        if(ch == 'm') {
+        if(ch == 'q') {
+            save_game(p,g,screen);
+            save_screen();
+        }
+        else if(ch == 'm') {
             display_whole++;
             continue;
         }
         switch(handle_movement(screen, visited, ch, g)) {
             case 1:
-                floor_generator(floor_number+1, g);
+                g->floor_number += 1;
+                floor_generator(p,g);
                 break;
         }
     }
-
 }
 
 void map_builder(Game *g, int initial_room) {
@@ -935,10 +946,28 @@ void corridor_path(char direction, Pos door1, Pos door2) {
   
 }
 
-void display_screen(int **visited, char **screen) {
-    for(int j=1; j<LINES; j++) {
-        for(int i=0; i<COLS; i++) {
-            if(visited[i][j]) {
+void display_screen(char mode[], int **visited, char **screen) {
+    if(strcmp(mode,"hidden") == 0) {
+        for(int j=1; j<LINES; j++) {
+            for(int i=0; i<COLS; i++) {
+                if(visited[i][j]) {
+                    if(screen[i][j] == '^') {
+                        attron(COLOR_PAIR(2));
+                        mvprintw(j,i,"%c",screen[i][j]);
+                        attroff(COLOR_PAIR(2));
+                        continue;
+                    }
+                    mvprintw(j,i,"%c",screen[i][j]);
+                }
+                else {
+                    mvprintw(j,i," ");
+                }
+            }
+        }
+    }
+    else {
+        for(int j=1; j<LINES; j++) {
+            for(int i=0; i<COLS; i++) {
                 if(screen[i][j] == '^') {
                     attron(COLOR_PAIR(2));
                     mvprintw(j,i,"%c",screen[i][j]);
@@ -947,11 +976,8 @@ void display_screen(int **visited, char **screen) {
                 }
                 mvprintw(j,i,"%c",screen[i][j]);
             }
-            else {
-                mvprintw(j,i," ");
-            }
         }
-    }
+    }   
 }
 
 int check_room(Room *rooms, int i, int j) {
@@ -975,4 +1001,86 @@ int check_trap(Room *rooms, int i, int j) {
         }
     }
     return 0;
+}
+
+void terminate_game(Player *p, Game *g) {
+    p->score += g->players_score;
+    p->gold += g->players_gold;
+    FILE *accounts = fopen("accounts.txt", "r");
+    FILE *temp_file = fopen("temp.txt", "w");
+    char line[50];
+    while(fgets(line, 50, accounts)) {
+        line[strcspn(line,"\n")] = 0;
+        if(strcmp(line,p->username) == 0) {
+            fprintf(temp_file, "%s\n", line);
+            fgets(line, 50, accounts); line[strcspn(line,"\n")] = 0; fprintf(temp_file, "%s\n", line);
+            fgets(line, 50, accounts); line[strcspn(line,"\n")] = 0; fprintf(temp_file, "%s\n", line);
+            fgets(line, 50, accounts); fprintf(temp_file, "%d\n", p->score);
+            fgets(line, 50, accounts); fprintf(temp_file, "%d\n", p->gold);
+            fgets(line, 50, accounts); fprintf(temp_file, "%d\n", p->count_games);
+        }
+        else {
+            fprintf(temp_file, "%s\n", line);
+        }
+    }
+    fclose(accounts);
+    fclose(temp_file);
+    remove("accounts.txt");
+    rename("temp.txt","accounts.txt");
+
+    exit_screen(p);
+}
+
+void exit_screen(Player *p) {
+    clear();
+
+    init_pair(1, COLOR_BLACK, COLOR_RED);
+    attron(COLOR_PAIR(1));
+    mvprintw(LINES/2,COLS/2-4,"GAME OVER!");
+    attroff(COLOR_PAIR(1));
+
+    mvprintw(LINES/2+2,COLS/2-20,"Press Q to EXIT or S to view the SCOREBOARD");
+
+    int ch = getch();
+
+    if(ch == 'q') {
+        endwin();
+        exit(0);
+    }
+    else if(ch == 's') {
+        score_board(p);
+    }
+    exit_screen(p);
+}
+
+void save_game(Player *p, Game *g, char **screen) {
+    if(fopen(txt_format(p->username),"r")) {
+        remove(txt_format(p->username));
+    }
+}
+
+void save_screen() {
+    clear();
+
+    init_pair(1, COLOR_BLACK, COLOR_GREEN);
+    attron(COLOR_PAIR(1));
+    mvprintw(LINES/2,COLS/2-16,"GAME HAS BEEN SAVED SUCCESSFULLY!");
+    attroff(COLOR_PAIR(1));
+
+    mvprintw(LINES/2+2,COLS/2-28,"Rerun the game to play your last game or start a new one");
+    mvprintw(LINES/2+3,COLS/2-10,"Press any key to EXIT");
+
+    int ch = getch();
+
+    endwin();
+    exit(0);
+}
+
+void not_saved_screen() {
+    clear();
+
+    mvprintw(LINES/2,COLS/2-14,"THERE ARE NO SAVED GAMES :(");
+    mvprintw(LINES/2+2,COLS/2-14,"Press any key to RETURN");
+
+    int ch = getch();
 }
