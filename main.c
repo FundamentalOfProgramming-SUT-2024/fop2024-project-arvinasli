@@ -30,6 +30,7 @@ typedef struct {
     Pos traps[10];
     int gold;
     int dark_gold;
+    int ordinary_food;
 } Room;
 
 typedef struct {
@@ -43,6 +44,9 @@ typedef struct {
     int players_score;
     int players_gold;
     int floor_number;
+    int players_hungriness;
+    int players_ordinary_food;
+    time_t start_time;
 } Game;
 
 void login(Player *p);
@@ -67,6 +71,7 @@ void exit_screen(Player *p);
 void save_game(Player *p, Game *g, char **screen);
 void save_screen();
 void not_saved_screen();
+void food_screen(Game *g);
 
 int main() {
     initscr();
@@ -485,6 +490,10 @@ void game_launcher(Player *p, Game *g) {
     g->players_score = 0;
     g->players_gold = 0;
     g->floor_number = 1;
+    g->players_hungriness = 0;
+    g->players_ordinary_food = 0;
+    g->start_time = time(NULL);
+
     p->count_games++;
 
     floor_generator(p, g);
@@ -519,6 +528,7 @@ void floor_generator(Player *p, Game *g) {
         g->rooms[k].traps_count = 1+rand()%3;
         g->rooms[k].gold = 1 + rand()%4;
         g->rooms[k].dark_gold = rand()%2 * rand()%2;
+        g->rooms[k].ordinary_food = 1 + rand()%2;
     }
 
     for(int j=1; j<LINES; j++) {
@@ -539,7 +549,7 @@ void floor_generator(Player *p, Game *g) {
 
     int k1 = rand()%6; int k2 = rand()%6;
     for(int k=0; k<6; k++) {
-        int d1=1; int d2=1; int stairs = 0; int trap = 0; int gold = 0; int dark_gold = 0;
+        int d1=1; int d2=1; int stairs = 0; int trap = 0; int gold = 0; int dark_gold = 0; int ordinary_food = 0;
         for(int j=1; j<LINES; j++) {
             for(int i=0; i<COLS; i++) {
                 if(k == 0) {
@@ -635,6 +645,10 @@ void floor_generator(Player *p, Game *g) {
                         mvprintw(j,i,"$");
                         dark_gold++;
                     }
+                    if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && ordinary_food<g->rooms[k].ordinary_food) {
+                        mvprintw(j,i,"f");
+                        ordinary_food++;
+                    }
                 }
             }
         }
@@ -675,6 +689,17 @@ void floor_generator(Player *p, Game *g) {
     while(1) {
         display_message("Welcome to the game!", g->floor_number, g->players_score, g->players_gold);
         display_health(g);
+        time_t current_time = time(NULL);
+        double elapsed_time = difftime(current_time, g->start_time);
+        if(elapsed_time > 30) {
+            if(g->players_hungriness <= 8) {
+                g->players_hungriness += 2;
+            }
+            g->start_time = time(NULL);
+            if(g->players_hungriness >= 6) {
+                g->players_health -= g->players_hungriness/5;
+            }
+        }
         if(g->players_health == 0) {
             terminate_game(p, g);
         }
@@ -696,6 +721,9 @@ void floor_generator(Player *p, Game *g) {
         else if(ch == 'm') {
             display_whole++;
             continue;
+        }
+        else if(ch == 'e') {
+            food_screen(g);
         }
         switch(handle_movement(screen, visited, ch, g)) {
             case 1:
@@ -824,6 +852,7 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '<') { return 1; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
+            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
             if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y-1)) { screen[g->player_pos.x][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; }
             break;
@@ -832,6 +861,7 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '<') { return 1; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
+            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
             if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y+1)) { screen[g->player_pos.x][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; }
             break;
@@ -840,6 +870,7 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '<') { return 1; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
+            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
             if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y)) { screen[g->player_pos.x-1][g->player_pos.y]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.x--; }
             break;
@@ -848,6 +879,7 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '<') { return 1; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
+            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
             if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y)) { screen[g->player_pos.x+1][g->player_pos.y]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.x++; }
             break;
@@ -855,7 +887,8 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             character = mvinch(g->player_pos.y-1, g->player_pos.x+1) & A_CHARTEXT;
             if(character == '<') { return 1; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x++; return 0; }
-            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.y--; g->player_pos.x++; return 0; }
+            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.y--; g->player_pos.x++; return 0; }
             if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y-1)) { screen[g->player_pos.x+1][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; g->player_pos.x++; }
             break;
@@ -864,6 +897,7 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '<') { return 1; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x--; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x--; return 0; }
+            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x--; return 0; }
             if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y-1)) { screen[g->player_pos.x-1][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; g->player_pos.x--; }
             break;
@@ -872,6 +906,7 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '<') { return 1; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x++; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x++; return 0; }
+            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x++; return 0; }
             if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y+1)) { screen[g->player_pos.x+1][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; g->player_pos.x++; }
             break;
@@ -880,6 +915,7 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '<') { return 1; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x--; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x--; return 0; }
+            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x--; return 0; }
             if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y+1)) { screen[g->player_pos.x-1][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; g->player_pos.x--; }
             break;
@@ -1001,6 +1037,12 @@ void display_screen(char mode[], int **visited, char **screen) {
                         attroff(COLOR_PAIR(5));
                         continue;
                     }
+                    else if(screen[i][j] == 'f') {
+                        attron(COLOR_PAIR(3)); attron(A_REVERSE);
+                        mvprintw(j,i,"%c",screen[i][j]);
+                        attroff(COLOR_PAIR(3)); attroff(A_REVERSE);
+                        continue;
+                    }
                     mvprintw(j,i,"%c",screen[i][j]);
                 }
                 else {
@@ -1028,6 +1070,12 @@ void display_screen(char mode[], int **visited, char **screen) {
                     attron(COLOR_PAIR(5));
                     mvprintw(j,i,"%c",screen[i][j]);
                     attroff(COLOR_PAIR(5));
+                    continue;
+                }
+                else if(screen[i][j] == 'f') {
+                    attron(COLOR_PAIR(3)); attron(A_REVERSE);
+                    mvprintw(j,i,"%c",screen[i][j]);
+                    attroff(COLOR_PAIR(3)); attroff(A_REVERSE);
                     continue;
                 }
                 mvprintw(j,i,"%c",screen[i][j]);
@@ -1139,4 +1187,64 @@ void not_saved_screen() {
     mvprintw(LINES/2+2,COLS/2-14,"Press any key to RETURN");
 
     int ch = getch();
+}
+
+void food_screen(Game *g) {
+    clear();
+
+    attron(COLOR_PAIR(3));
+    mvprintw(0, 1, "FOOD MENU");
+    attroff(COLOR_PAIR(3));
+
+    mvprintw(0, 20, "Choose a food to consume it");
+    
+    draw_cheese();
+
+    const char *foods[] = {"Ordinary FOODS", "Super FOODS", "Magical FOODS", "Rotten FOODS", "RETURN"};
+
+    int choose = 0;
+    while (1) {
+        display_health(g);
+        mvprintw(10, 8, "                                           ");
+        mvprintw(10, 8, "Hungriness: [");
+        attron(COLOR_PAIR(2));
+        for(int i=0; i<g->players_hungriness; i++) {
+            mvprintw(10, 21+2*i, "**");
+        }
+        attroff(COLOR_PAIR(2));
+        mvprintw(10, 41, "]");
+        for (int i=0; i<5; i++) {
+            if (i == choose)
+                attron(A_REVERSE);
+            if(i == 0) {
+                mvprintw(12+i, 1, "%s (%d)", foods[i], g->players_ordinary_food);
+            }
+            else {
+                mvprintw(12+i, 1, "%s", foods[i]);
+            }
+            if (i == choose)
+                attroff(A_REVERSE);
+        }
+
+        int ch = getch();
+        if (ch == KEY_UP && choose != 0)
+            choose--;
+        else if (ch == KEY_DOWN && choose != 4)
+            choose++;
+        else if (ch == 10) {
+            if(choose == 0 && g->players_ordinary_food != 0 && g->players_hungriness > 0) {
+                g->players_ordinary_food -= 1;
+                g->players_hungriness -= 1;
+            }
+            else if(choose == 0 && g->players_ordinary_food != 0 && g->players_hungriness == 0 && g->players_health != g->MAX_health) {
+                g->players_ordinary_food -= 1;
+                g->players_health += 1;
+            }
+            if(choose == 4) {
+                break;
+            }
+        }
+
+    }
+    clear();
 }

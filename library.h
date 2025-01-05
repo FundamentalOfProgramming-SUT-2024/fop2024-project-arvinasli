@@ -17,6 +17,19 @@ void draw_rogue() {
     attroff(COLOR_PAIR(1));
 }
 
+void draw_cheese() {
+    init_pair(1, COLOR_YELLOW, COLOR_BLACK);
+    attron(COLOR_PAIR(1));
+    mvprintw(2, 1, "       ___");
+    mvprintw(3, 1, "     .'o O'-._");
+    mvprintw(4, 1, "    / O o_.-`|");
+    mvprintw(5, 1, "   /O_.-'  O |  LIST OF FOODS:");
+    mvprintw(6, 1, "   | o   o .-`");
+    mvprintw(7, 1, "   |o O_.-'");
+    mvprintw(8, 1, "   '--`");
+    attroff(COLOR_PAIR(1));
+}
+
 int str_to_num (char *str) {
     int num = 0;
     int p = strlen(str)-1;
