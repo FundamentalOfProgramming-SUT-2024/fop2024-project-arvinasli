@@ -1,4 +1,4 @@
-#include <ncurses.h>
+#include <ncursesw/ncurses.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -20,6 +20,7 @@ typedef struct {
 } Player;
 
 typedef struct {
+    char type[10];
     Pos room_pos;
     int room_size_v;
     int room_size_h;
@@ -27,6 +28,8 @@ typedef struct {
     Pos pillar_seed;
     int traps_count;
     Pos traps[10];
+    int gold;
+    int dark_gold;
 } Room;
 
 typedef struct {
@@ -469,6 +472,8 @@ void game_launcher(Player *p, Game *g) {
     init_pair(1, COLOR_BLUE, COLOR_BLACK);
     init_pair(2, COLOR_RED, COLOR_BLACK);
     init_pair(3, COLOR_GREEN, COLOR_BLACK);
+    init_pair(4, COLOR_YELLOW, COLOR_BLACK);
+    init_pair(5, COLOR_MAGENTA, COLOR_BLACK);
 
     if(g->difficulty) {
         g->MAX_health = 5;
@@ -512,6 +517,8 @@ void floor_generator(Player *p, Game *g) {
         g->rooms[k].pillar_seed.x = g->rooms[k].room_pos.x + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_h-3));
         g->rooms[k].pillar_seed.y = g->rooms[k].room_pos.y + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_v-3));
         g->rooms[k].traps_count = 1+rand()%3;
+        g->rooms[k].gold = 1 + rand()%4;
+        g->rooms[k].dark_gold = rand()%2 * rand()%2;
     }
 
     for(int j=1; j<LINES; j++) {
@@ -532,7 +539,7 @@ void floor_generator(Player *p, Game *g) {
 
     int k1 = rand()%6; int k2 = rand()%6;
     for(int k=0; k<6; k++) {
-        int d1=1; int d2=1; int stairs = 0; int trap = 0;
+        int d1=1; int d2=1; int stairs = 0; int trap = 0; int gold = 0; int dark_gold = 0;
         for(int j=1; j<LINES; j++) {
             for(int i=0; i<COLS; i++) {
                 if(k == 0) {
@@ -608,7 +615,7 @@ void floor_generator(Player *p, Game *g) {
                 
                 if(abs(i-g->rooms[k].room_pos.x) < g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v) {
                     if(g->floor_number != 4) {
-                        if(k == k1 || k == k2) {
+                        if((k == k1 || k == k2) && k!=check_room(g->rooms,g->player_pos.x,g->player_pos.y)) {
                             if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && stairs<1) {
                                 mvprintw(j, i, "<");
                                 stairs++;
@@ -618,6 +625,15 @@ void floor_generator(Player *p, Game *g) {
                     if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && trap<g->rooms[k].traps_count) {
                         g->rooms[k].traps[trap].x = i; g->rooms[k].traps[trap].y = j;
                         trap++;
+                    }
+                    if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && gold<g->rooms[k].gold) {
+                        mvaddstr(j,i,"o");
+                        i--;
+                        gold++;
+                    }
+                    if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && dark_gold<g->rooms[k].dark_gold) {
+                        mvprintw(j,i,"$");
+                        dark_gold++;
                     }
                 }
             }
@@ -716,10 +732,10 @@ void map_builder(Game *g, int initial_room) {
 
 int handle_movement(char **screen, int **visited, int ch, Game *g) {
     int count_dots = 0;
-    chtype character = mvinch(g->player_pos.y-1, g->player_pos.x); if(character == '.') {count_dots++;}
-    character = mvinch(g->player_pos.y+1, g->player_pos.x); if(character == '.') {count_dots++;}
-    character = mvinch(g->player_pos.y, g->player_pos.x-1); if(character == '.') {count_dots++;}
-    character = mvinch(g->player_pos.y, g->player_pos.x+1); if(character == '.') {count_dots++;}
+    char character = mvinch(g->player_pos.y-1, g->player_pos.x) & A_CHARTEXT; if(character == '.') {count_dots++;}
+    character = mvinch(g->player_pos.y+1, g->player_pos.x) & A_CHARTEXT; if(character == '.') {count_dots++;}
+    character = mvinch(g->player_pos.y, g->player_pos.x-1) & A_CHARTEXT; if(character == '.') {count_dots++;}
+    character = mvinch(g->player_pos.y, g->player_pos.x+1) & A_CHARTEXT; if(character == '.') {count_dots++;}
     if(count_dots >= 2) {
         mvprintw(g->player_pos.y, g->player_pos.x, ".");
     }
@@ -804,50 +820,66 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
 
     switch (ch) {
         case '8':
-            character = mvinch(g->player_pos.y-1, g->player_pos.x);
+            character = mvinch(g->player_pos.y-1, g->player_pos.x) & A_CHARTEXT;
             if(character == '<') { return 1; }
+            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
             if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y-1)) { screen[g->player_pos.x][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; }
             break;
         case '2':
-            character = mvinch(g->player_pos.y+1, g->player_pos.x);
+            character = mvinch(g->player_pos.y+1, g->player_pos.x) & A_CHARTEXT;
             if(character == '<') { return 1; }
+            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
             if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y+1)) { screen[g->player_pos.x][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; }
             break;
         case '4':
-            character = mvinch(g->player_pos.y, g->player_pos.x-1);
+            character = mvinch(g->player_pos.y, g->player_pos.x-1) & A_CHARTEXT;
             if(character == '<') { return 1; }
+            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
             if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y)) { screen[g->player_pos.x-1][g->player_pos.y]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.x--; }
             break;
         case '6':
-            character = mvinch(g->player_pos.y, g->player_pos.x+1);
+            character = mvinch(g->player_pos.y, g->player_pos.x+1) & A_CHARTEXT;
             if(character == '<') { return 1; }
+            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
             if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y)) { screen[g->player_pos.x+1][g->player_pos.y]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.x++; }
             break;
         case '9':
-            character = mvinch(g->player_pos.y-1, g->player_pos.x+1);
+            character = mvinch(g->player_pos.y-1, g->player_pos.x+1) & A_CHARTEXT;
             if(character == '<') { return 1; }
+            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x++; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
             if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y-1)) { screen[g->player_pos.x+1][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; g->player_pos.x++; }
             break;
         case '7':
-            character = mvinch(g->player_pos.y-1, g->player_pos.x-1);
+            character = mvinch(g->player_pos.y-1, g->player_pos.x-1) & A_CHARTEXT;
             if(character == '<') { return 1; }
+            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x--; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x--; return 0; }
             if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y-1)) { screen[g->player_pos.x-1][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; g->player_pos.x--; }
             break;
         case '3':
-            character = mvinch(g->player_pos.y+1, g->player_pos.x+1);
+            character = mvinch(g->player_pos.y+1, g->player_pos.x+1) & A_CHARTEXT;
             if(character == '<') { return 1; }
+            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x++; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x++; return 0; }
             if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y+1)) { screen[g->player_pos.x+1][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; g->player_pos.x++; }
             break;
         case '1':
-            character = mvinch(g->player_pos.y+1, g->player_pos.x-1);
+            character = mvinch(g->player_pos.y+1, g->player_pos.x-1) & A_CHARTEXT;
             if(character == '<') { return 1; }
+            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x--; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x--; return 0; }
             if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y+1)) { screen[g->player_pos.x-1][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; g->player_pos.x--; }
             break;
@@ -957,6 +989,18 @@ void display_screen(char mode[], int **visited, char **screen) {
                         attroff(COLOR_PAIR(2));
                         continue;
                     }
+                    else if(screen[i][j] == 'o') {
+                        attron(COLOR_PAIR(4));
+                        mvprintw(j,i,"%c",screen[i][j]);
+                        attroff(COLOR_PAIR(4));
+                        continue;
+                    }
+                    else if(screen[i][j] == '$') {
+                        attron(COLOR_PAIR(5));
+                        mvprintw(j,i,"%c",screen[i][j]);
+                        attroff(COLOR_PAIR(5));
+                        continue;
+                    }
                     mvprintw(j,i,"%c",screen[i][j]);
                 }
                 else {
@@ -972,6 +1016,18 @@ void display_screen(char mode[], int **visited, char **screen) {
                     attron(COLOR_PAIR(2));
                     mvprintw(j,i,"%c",screen[i][j]);
                     attroff(COLOR_PAIR(2));
+                    continue;
+                }
+                else if(screen[i][j] == 'o') {
+                    attron(COLOR_PAIR(4));
+                    mvprintw(j,i,"%c",screen[i][j]);
+                    attroff(COLOR_PAIR(4));
+                    continue;
+                }
+                else if(screen[i][j] == '$') {
+                    attron(COLOR_PAIR(5));
+                    mvprintw(j,i,"%c",screen[i][j]);
+                    attroff(COLOR_PAIR(5));
                     continue;
                 }
                 mvprintw(j,i,"%c",screen[i][j]);
