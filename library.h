@@ -30,6 +30,14 @@ void draw_cheese() {
     attroff(COLOR_PAIR(1));
 }
 
+void draw_trophy(int x, int y) {
+    mvprintw(y-4, x-4, "__");
+    mvprintw(y-3, x-6, "(|  |)");
+    mvprintw(y-2, x-5, "(  )");
+    mvprintw(y-1, x-5, "_)(_");
+}
+
+
 int str_to_num (char *str) {
     int num = 0;
     int p = strlen(str)-1;

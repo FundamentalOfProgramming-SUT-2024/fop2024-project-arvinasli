@@ -20,7 +20,7 @@ typedef struct {
 } Player;
 
 typedef struct {
-    char type[10];
+    int type;
     Pos room_pos;
     int room_size_v;
     int room_size_h;
@@ -61,10 +61,10 @@ void map_builder(Game *g, int initial_room);
 int handle_movement(char **screen, int **visited, int ch, Game *g);
 void display_health(Game *g);
 void corridor_path(char direction, Pos door1, Pos door2);
-void display_screen(char mode[], int **visited, char **screen);
+void display_screen(Game *g, char mode[], int **visited, char **screen);
 void floor_generator(Player *p, Game *g);
 int check_room(Room *rooms, int i, int j);
-void display_message(char message[], int floor, int score, int gold);
+void display_message(int floor, int score, int gold);
 int check_trap(Room *rooms, int i, int j);
 void terminate_game(Player *p, Game *g);
 void exit_screen(Player *p);
@@ -82,16 +82,18 @@ int main() {
 
     srand(time(NULL));
 
-    Player p;
-    login(&p);
+    Player *p = (Player *) malloc(sizeof(Player));
+    login(p);
 
-    Game g;
-    g.difficulty = 0; g.player_color = 0;
-    menu_handler(&p,&g);
+    Game *g = (Game *) malloc(sizeof(Game));
+    g->difficulty = 0; g->player_color = 0;
+    menu_handler(p,g);
     
     endwin();
     return 0;
 }
+
+char message[100] = "Welcome to the game!";
 
 void login(Player *p) {
     clear();
@@ -505,30 +507,55 @@ void game_launcher(Player *p, Game *g) {
 void floor_generator(Player *p, Game *g) {
     clear();
 
-    if(g->floor_number == 1) {
+    for(int k=0; k<6; k++) {
+        g->rooms[k].type = 0;
+    }
 
+    if(g->floor_number == 1) {
         map_builder(g,6);
     }
     else if(g->floor_number == 2) {
-
+        strcpy(message, "You entered a new floor!");
         map_builder(g,check_room(g->rooms,g->player_pos.x,g->player_pos.y));
     }
     else if(g->floor_number == 3) {
-
+        strcpy(message, "You entered a new floor!");
         map_builder(g,check_room(g->rooms,g->player_pos.x,g->player_pos.y));
     }
     else if(g->floor_number == 4) {
-
+        strcpy(message, "You're now in the last floor'!");
         map_builder(g,check_room(g->rooms,g->player_pos.x,g->player_pos.y));
+        int count_treasure_rooms = 0; double avg_size = 0;
+        for(int k=0; k<6; k++) { avg_size += (g->rooms[k].room_size_h+g->rooms[k].room_size_v); }
+        avg_size /= 6;
+        for(int k=0; k<6; k++) { 
+            if(g->rooms[k].room_size_h+g->rooms[k].room_size_v > avg_size && k!=check_room(g->rooms,g->player_pos.x,g->player_pos.y)) {
+                g->rooms[k].type = 1;
+                count_treasure_rooms += 1;
+            }
+            if(count_treasure_rooms == 2) {
+                break;
+            }
+        }
     }
 
     for(int k=0; k<6; k++) {
-        g->rooms[k].pillar_seed.x = g->rooms[k].room_pos.x + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_h-3));
-        g->rooms[k].pillar_seed.y = g->rooms[k].room_pos.y + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_v-3));
-        g->rooms[k].traps_count = 1+rand()%3;
-        g->rooms[k].gold = 1 + rand()%4;
-        g->rooms[k].dark_gold = rand()%2 * rand()%2;
-        g->rooms[k].ordinary_food = 1 + rand()%2;
+        if(g->rooms[k].type == 1) {
+            g->rooms[k].pillar_seed.x = g->rooms[k].room_pos.x + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_h-3));
+            g->rooms[k].pillar_seed.y = g->rooms[k].room_pos.y + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_v-3));
+            g->rooms[k].traps_count = 7+rand()%5;
+            g->rooms[k].gold = 0;
+            g->rooms[k].dark_gold = 10;
+            g->rooms[k].ordinary_food = 0;
+        }
+        else {
+            g->rooms[k].pillar_seed.x = g->rooms[k].room_pos.x + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_h-3));
+            g->rooms[k].pillar_seed.y = g->rooms[k].room_pos.y + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_v-3));
+            g->rooms[k].traps_count = 1+rand()%3;
+            g->rooms[k].gold = 1 + rand()%4;
+            g->rooms[k].dark_gold = rand()%2 * rand()%2 * rand()%2;
+            g->rooms[k].ordinary_food = 1 + rand()%2;
+        } 
     }
 
     for(int j=1; j<LINES; j++) {
@@ -549,6 +576,9 @@ void floor_generator(Player *p, Game *g) {
 
     int k1 = rand()%6; int k2 = rand()%6;
     for(int k=0; k<6; k++) {
+        if(g->rooms[k].type == 1) {
+            draw_trophy(g->rooms[k].room_pos.x+g->rooms[k].room_size_h, g->rooms[k].room_pos.y+g->rooms[k].room_size_v);
+        }
         int d1=1; int d2=1; int stairs = 0; int trap = 0; int gold = 0; int dark_gold = 0; int ordinary_food = 0;
         for(int j=1; j<LINES; j++) {
             for(int i=0; i<COLS; i++) {
@@ -632,18 +662,30 @@ void floor_generator(Player *p, Game *g) {
                             }
                         }
                     }
-                    if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && trap<g->rooms[k].traps_count) {
-                        g->rooms[k].traps[trap].x = i; g->rooms[k].traps[trap].y = j;
-                        trap++;
-                    }
                     if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && gold<g->rooms[k].gold) {
-                        mvaddstr(j,i,"o");
+                        mvprintw(j,i,"o");
                         i--;
                         gold++;
                     }
-                    if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && dark_gold<g->rooms[k].dark_gold) {
-                        mvprintw(j,i,"$");
-                        dark_gold++;
+                    if(g->rooms[k].type == 1) {
+                        if(rand()%10 == 1 && mvinch(j,i) == '.' && dark_gold<g->rooms[k].dark_gold) {
+                            mvprintw(j,i,"$");
+                            dark_gold++;
+                        }
+                        if(rand()%10 == 1 && trap<g->rooms[k].traps_count) {
+                            g->rooms[k].traps[trap].x = i; g->rooms[k].traps[trap].y = j;
+                            trap++;
+                        }
+                    }
+                    else {
+                        if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && dark_gold<g->rooms[k].dark_gold) {
+                            mvprintw(j,i,"$");
+                            dark_gold++;
+                        }
+                        if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && trap<g->rooms[k].traps_count) {
+                            g->rooms[k].traps[trap].x = i; g->rooms[k].traps[trap].y = j;
+                            trap++;
+                        }
                     }
                     if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && ordinary_food<g->rooms[k].ordinary_food) {
                         mvprintw(j,i,"f");
@@ -685,9 +727,9 @@ void floor_generator(Player *p, Game *g) {
     }
 
     int display_whole = 0;
-    display_screen("hidden",visited,screen);
+    display_screen(g,"hidden",visited,screen);
     while(1) {
-        display_message("Welcome to the game!", g->floor_number, g->players_score, g->players_gold);
+        display_message(g->floor_number, g->players_score, g->players_gold);
         display_health(g);
         time_t current_time = time(NULL);
         double elapsed_time = difftime(current_time, g->start_time);
@@ -704,10 +746,10 @@ void floor_generator(Player *p, Game *g) {
             terminate_game(p, g);
         }
         if(display_whole%2 == 1) {
-            display_screen("view",visited,screen);
+            display_screen(g,"view",visited,screen);
         }
         else {
-            display_screen("hidden",visited,screen);
+            display_screen(g,"hidden",visited,screen);
         }
         attron(COLOR_PAIR(g->player_color));
         mvprintw(g->player_pos.y, g->player_pos.x, "@");
@@ -1014,11 +1056,25 @@ void corridor_path(char direction, Pos door1, Pos door2) {
   
 }
 
-void display_screen(char mode[], int **visited, char **screen) {
+void display_screen(Game *g, char mode[], int **visited, char **screen) {
     if(strcmp(mode,"hidden") == 0) {
         for(int j=1; j<LINES; j++) {
             for(int i=0; i<COLS; i++) {
                 if(visited[i][j]) {
+                    if(g->rooms[check_room(g->rooms,i,j)].type == 1) {
+                        if(screen[i][j] == '.') {
+                            attron(COLOR_PAIR(4));
+                            mvprintw(j,i,"%c",screen[i][j]);
+                            attroff(COLOR_PAIR(4));
+                            continue;
+                        }
+                        else if(screen[i][j] == '|' || screen[i][j] == '-' || screen[i][j] == '_' || screen[i][j] == '(' || screen[i][j] == ')') {
+                            attron(COLOR_PAIR(5));
+                            mvprintw(j,i,"%c",screen[i][j]);
+                            attroff(COLOR_PAIR(5));
+                            continue;
+                        }
+                    }
                     if(screen[i][j] == '^') {
                         attron(COLOR_PAIR(2));
                         mvprintw(j,i,"%c",screen[i][j]);
@@ -1054,6 +1110,20 @@ void display_screen(char mode[], int **visited, char **screen) {
     else {
         for(int j=1; j<LINES; j++) {
             for(int i=0; i<COLS; i++) {
+                if(g->rooms[check_room(g->rooms,i,j)].type == 1) {
+                    if(screen[i][j] == '.') {
+                        attron(COLOR_PAIR(4));
+                        mvprintw(j,i,"%c",screen[i][j]);
+                        attroff(COLOR_PAIR(4));
+                        continue;
+                    }
+                    else if(screen[i][j] == '|' || screen[i][j] == '-' || screen[i][j] == '_' || screen[i][j] == '(' || screen[i][j] == ')') {
+                        attron(COLOR_PAIR(5));
+                        mvprintw(j,i,"%c",screen[i][j]);
+                        attroff(COLOR_PAIR(5));
+                        continue;
+                    }
+                }
                 if(screen[i][j] == '^') {
                     attron(COLOR_PAIR(2));
                     mvprintw(j,i,"%c",screen[i][j]);
@@ -1092,7 +1162,7 @@ int check_room(Room *rooms, int i, int j) {
     }
 }
 
-void display_message(char message[], int floor, int score, int gold) {
+void display_message(int floor, int score, int gold) {
     mvprintw(0,0,"%s FLOOR:%d   SCORE:%d    GOLD:%d", message, floor, score, gold);
 }
 
