@@ -21,6 +21,7 @@ typedef struct {
 
 typedef struct {
     int type;
+    int locked;
     Pos room_pos;
     int room_size_v;
     int room_size_h;
@@ -72,6 +73,7 @@ void save_game(Player *p, Game *g, char **screen);
 void save_screen();
 void not_saved_screen();
 void food_screen(Game *g);
+char *password();
 
 int main() {
     initscr();
@@ -481,6 +483,7 @@ void game_launcher(Player *p, Game *g) {
     init_pair(3, COLOR_GREEN, COLOR_BLACK);
     init_pair(4, COLOR_YELLOW, COLOR_BLACK);
     init_pair(5, COLOR_MAGENTA, COLOR_BLACK);
+    init_pair(6, COLOR_CYAN, COLOR_BLACK);
 
     if(g->difficulty) {
         g->MAX_health = 5;
@@ -509,6 +512,7 @@ void floor_generator(Player *p, Game *g) {
 
     for(int k=0; k<6; k++) {
         g->rooms[k].type = 0;
+        g->rooms[k].locked = 0;
     }
 
     if(g->floor_number == 1) {
@@ -574,10 +578,18 @@ void floor_generator(Player *p, Game *g) {
         }
     }
 
-    int k1 = rand()%6; int k2 = rand()%6;
+    int k1 = rand()%6; int k2 = rand()%6; int k_lock = rand()%6; g->rooms[k_lock].locked = 1;
     for(int k=0; k<6; k++) {
         if(g->rooms[k].type == 1) {
             draw_trophy(g->rooms[k].room_pos.x+g->rooms[k].room_size_h, g->rooms[k].room_pos.y+g->rooms[k].room_size_v);
+        }
+        if(g->rooms[k].locked == 1) {
+            if(rand()%2) {
+                mvprintw(g->rooms[k].room_pos.y+g->rooms[k].room_size_v-1, g->rooms[k].room_pos.x+g->rooms[k].room_size_h-1, "&");
+            }
+            else {
+                mvprintw(g->rooms[k].room_pos.y-g->rooms[k].room_size_v+1, g->rooms[k].room_pos.x-g->rooms[k].room_size_h+1, "&");
+            }
         }
         int d1=1; int d2=1; int stairs = 0; int trap = 0; int gold = 0; int dark_gold = 0; int ordinary_food = 0;
         for(int j=1; j<LINES; j++) {
@@ -590,14 +602,24 @@ void floor_generator(Player *p, Game *g) {
                     }
                     else if(i-g->rooms[k].room_pos.x == g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v && d2) {
                         int new_j = j+rand()%g->rooms[k].room_size_v;
-                        mvprintw(new_j, i, "+"); d2 = 0;
+                        if(k == k_lock) {
+                            mvprintw(new_j, i, "@"); d2 = 0;
+                        }
+                        else {
+                            mvprintw(new_j, i, "+"); d2 = 0;
+                        }
                         g->rooms[k].doors[0].x = i; g->rooms[k].doors[0].y = new_j;
                     }
                 }
                 else if(k == 1) {
                     if(g->rooms[k].room_pos.y-j == g->rooms[k].room_size_v && abs(i-g->rooms[k].room_pos.x) <= g->rooms[k].room_size_h && d1) {
                         int new_i = i+rand()%g->rooms[k].room_size_h;
-                        mvprintw(j, new_i, "+"); d1 = 0;
+                        if(k == k_lock) {
+                            mvprintw(j, new_i, "@"); d1 = 0;
+                        }
+                        else {
+                            mvprintw(j, new_i, "+"); d1 = 0;
+                        }
                         g->rooms[k].doors[0].x = new_i; g->rooms[k].doors[0].y = j;
                     }
                     else if(i-g->rooms[k].room_pos.x == g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v && d2) {
@@ -614,14 +636,24 @@ void floor_generator(Player *p, Game *g) {
                     }
                     else if(i-g->rooms[k].room_pos.x == g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v && d2) {
                         int new_j = j+rand()%g->rooms[k].room_size_v;
-                        mvprintw(new_j, i, "+"); d2 = 0;
+                        if(k == k_lock) {
+                            mvprintw(new_j, i, "@"); d2 = 0;
+                        }
+                        else {
+                            mvprintw(new_j, i, "+"); d2 = 0;
+                        }
                         g->rooms[k].doors[1].x = i; g->rooms[k].doors[1].y = new_j;
                     }
                 }
                 else if(k == 4) {
                     if(j-g->rooms[k].room_pos.y == g->rooms[k].room_size_v && abs(i-g->rooms[k].room_pos.x) <= g->rooms[k].room_size_h && d1) {
                         int new_i = i+rand()%g->rooms[k].room_size_h;
-                        mvprintw(j, new_i, "+"); d1 = 0;
+                        if(k == k_lock) {
+                            mvprintw(j, new_i, "@"); d1 = 0;
+                        }
+                        else {
+                            mvprintw(j, new_i, "+"); d1 = 0;
+                        }
                         g->rooms[k].doors[1].x = new_i; g->rooms[k].doors[1].y = j;
                     }
                     else if(g->rooms[k].room_pos.x-i == g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v && d2) {
@@ -638,7 +670,12 @@ void floor_generator(Player *p, Game *g) {
                     }
                     else if(g->rooms[k].room_pos.x-i == g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v && d2) {
                         int new_j = j+rand()%g->rooms[k].room_size_v;
-                        mvprintw(new_j, i, "+"); d2 = 0;
+                        if (k == k_lock) {
+                            mvprintw(new_j, i, "@"); d2 = 0;
+                        }
+                        else {
+                            mvprintw(new_j, i, "+"); d2 = 0;
+                        }
                         g->rooms[k].doors[1].x = i; g->rooms[k].doors[1].y = new_j;
                     }
                 }
@@ -772,6 +809,9 @@ void floor_generator(Player *p, Game *g) {
                 g->floor_number += 1;
                 floor_generator(p,g);
                 break;
+            case 2:
+                strcpy(message, password());
+                break;
         }
     }
 }
@@ -896,6 +936,9 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
             if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y-1)) { screen[g->player_pos.x][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
+            if(character == '&' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { g->player_pos.y--; return 2; }
+            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { return 3; }
+            else if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 0) { g->player_pos.y--; return 0; }
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; }
             break;
         case '2':
@@ -905,6 +948,9 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
             if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y+1)) { screen[g->player_pos.x][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
+            if(character == '&' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { g->player_pos.y++; return 2; }
+            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { return 3; }
+            else if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 0) { g->player_pos.y++; return 0; }
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; }
             break;
         case '4':
@@ -914,6 +960,9 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
             if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y)) { screen[g->player_pos.x-1][g->player_pos.y]='^'; g->players_health -= 1; return 0;}
+            if(character == '&' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { g->player_pos.x--; return 2; }
+            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { return 3; }
+            else if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 0) { g->player_pos.x--; return 0; }
             if (character == '.' || character == '+' || character == '#') { g->player_pos.x--; }
             break;
         case '6':
@@ -923,6 +972,9 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
             if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y)) { screen[g->player_pos.x+1][g->player_pos.y]='^'; g->players_health -= 1; return 0;}
+            if(character == '&' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { g->player_pos.x++; return 2;}
+            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { return 3; }
+            else if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 0) { g->player_pos.x++; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.x++; }
             break;
         case '9':
@@ -932,6 +984,9 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.y--; g->player_pos.x++; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.y--; g->player_pos.x++; return 0; }
             if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y-1)) { screen[g->player_pos.x+1][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
+            if(character == '&' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { g->player_pos.x++; g->player_pos.y--; return 2;}
+            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { return 3; }
+            else if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 0) { g->player_pos.x++; g->player_pos.y--; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; g->player_pos.x++; }
             break;
         case '7':
@@ -941,6 +996,9 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x--; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x--; return 0; }
             if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y-1)) { screen[g->player_pos.x-1][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
+            if(character == '&' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { g->player_pos.x--; g->player_pos.y--; return 2;}
+            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { return 3; }
+            else if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 0) { g->player_pos.x--; g->player_pos.y--; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; g->player_pos.x--; }
             break;
         case '3':
@@ -950,6 +1008,9 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x++; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x++; return 0; }
             if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y+1)) { screen[g->player_pos.x+1][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
+            if(character == '&' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { g->player_pos.x++; g->player_pos.y++; return 2;}
+            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { return 3; }
+            else if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 0) { g->player_pos.x++; g->player_pos.y++; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; g->player_pos.x++; }
             break;
         case '1':
@@ -959,6 +1020,9 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x--; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x--; return 0; }
             if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y+1)) { screen[g->player_pos.x-1][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
+            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { g->player_pos.x--; g->player_pos.y++; return 2;}
+            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { return 3; }
+            else if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 0) { g->player_pos.x--; g->player_pos.y++; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; g->player_pos.x--; }
             break;
         case 'f':
@@ -1075,7 +1139,25 @@ void display_screen(Game *g, char mode[], int **visited, char **screen) {
                             continue;
                         }
                     }
-                    if(screen[i][j] == '^') {
+                    if(screen[i][j] == '@' && g->rooms[check_room(g->rooms,i,j)].locked == 1) {
+                        attron(COLOR_PAIR(2));
+                        mvprintw(j,i,"%c",screen[i][j]);
+                        attroff(COLOR_PAIR(2));
+                        continue;
+                    }
+                    else if(screen[i][j] == '@' && g->rooms[check_room(g->rooms,i,j)].locked == 0) {
+                        attron(COLOR_PAIR(3));
+                        mvprintw(j,i,"%c",screen[i][j]);
+                        attroff(COLOR_PAIR(3));
+                        continue;
+                    }
+                    else if(screen[i][j] == '&') {
+                        attron(COLOR_PAIR(6));
+                        mvprintw(j,i,"%c",screen[i][j]);
+                        attroff(COLOR_PAIR(6));
+                        continue;
+                    }
+                    else if(screen[i][j] == '^') {
                         attron(COLOR_PAIR(2));
                         mvprintw(j,i,"%c",screen[i][j]);
                         attroff(COLOR_PAIR(2));
@@ -1124,7 +1206,25 @@ void display_screen(Game *g, char mode[], int **visited, char **screen) {
                         continue;
                     }
                 }
-                if(screen[i][j] == '^') {
+                if(screen[i][j] == '@' && g->rooms[check_room(g->rooms,i,j)].locked == 1) {
+                    attron(COLOR_PAIR(2));
+                    mvprintw(j,i,"%c",screen[i][j]);
+                    attroff(COLOR_PAIR(2));
+                    continue;
+                }
+                else if(screen[i][j] == '@' && g->rooms[check_room(g->rooms,i,j)].locked == 0) {
+                    attron(COLOR_PAIR(3));
+                    mvprintw(j,i,"%c",screen[i][j]);
+                    attroff(COLOR_PAIR(3));
+                    continue;
+                }
+                else if(screen[i][j] == '&') {
+                    attron(COLOR_PAIR(6));
+                    mvprintw(j,i,"%c",screen[i][j]);
+                    attroff(COLOR_PAIR(6));
+                    continue;
+                }
+                else if(screen[i][j] == '^') {
                     attron(COLOR_PAIR(2));
                     mvprintw(j,i,"%c",screen[i][j]);
                     attroff(COLOR_PAIR(2));
@@ -1317,4 +1417,12 @@ void food_screen(Game *g) {
 
     }
     clear();
+}
+
+char *password() {
+    char *password = (char *) malloc(20*sizeof(char));
+    strcpy(password, "password: ");
+    password[10] = rand()%9+49; password[11] = rand()%10+48; password[12] = rand()%10+48; password[13] = rand()%10+48;
+    password[14] = 0;
+    return password;
 }
