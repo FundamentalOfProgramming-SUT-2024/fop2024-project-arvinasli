@@ -22,6 +22,7 @@ typedef struct {
 typedef struct {
     int type;
     int locked;
+    int password;
     Pos room_pos;
     int room_size_v;
     int room_size_h;
@@ -48,6 +49,8 @@ typedef struct {
     int players_hungriness;
     int players_ordinary_food;
     time_t start_time;
+    int k_lock;
+    time_t password_start_time;
 } Game;
 
 void login(Player *p);
@@ -67,13 +70,15 @@ void floor_generator(Player *p, Game *g);
 int check_room(Room *rooms, int i, int j);
 void display_message(int floor, int score, int gold);
 int check_trap(Room *rooms, int i, int j);
-void terminate_game(Player *p, Game *g);
-void exit_screen(Player *p);
+void terminate_game(int code, Player *p, Game *g);
+void you_won_screen(Player *p);
+void you_lost_screen(Player *p);
 void save_game(Player *p, Game *g, char **screen);
 void save_screen();
 void not_saved_screen();
 void food_screen(Game *g);
-char *password();
+void message_to_password(int password);
+void password_screen(Game *g);
 
 int main() {
     initscr();
@@ -484,6 +489,7 @@ void game_launcher(Player *p, Game *g) {
     init_pair(4, COLOR_YELLOW, COLOR_BLACK);
     init_pair(5, COLOR_MAGENTA, COLOR_BLACK);
     init_pair(6, COLOR_CYAN, COLOR_BLACK);
+    init_pair(7, 208, COLOR_BLACK); //Orange
 
     if(g->difficulty) {
         g->MAX_health = 5;
@@ -498,6 +504,7 @@ void game_launcher(Player *p, Game *g) {
     g->players_hungriness = 0;
     g->players_ordinary_food = 0;
     g->start_time = time(NULL);
+    g->password_start_time = time(NULL);
 
     p->count_games++;
 
@@ -516,6 +523,7 @@ void floor_generator(Player *p, Game *g) {
     }
 
     if(g->floor_number == 1) {
+        strcpy(message, "You're now in the first floor!");
         map_builder(g,6);
     }
     else if(g->floor_number == 2) {
@@ -527,7 +535,7 @@ void floor_generator(Player *p, Game *g) {
         map_builder(g,check_room(g->rooms,g->player_pos.x,g->player_pos.y));
     }
     else if(g->floor_number == 4) {
-        strcpy(message, "You're now in the last floor'!");
+        strcpy(message, "You're now in the last floor!");
         map_builder(g,check_room(g->rooms,g->player_pos.x,g->player_pos.y));
         int count_treasure_rooms = 0; double avg_size = 0;
         for(int k=0; k<6; k++) { avg_size += (g->rooms[k].room_size_h+g->rooms[k].room_size_v); }
@@ -578,7 +586,7 @@ void floor_generator(Player *p, Game *g) {
         }
     }
 
-    int k1 = rand()%6; int k2 = rand()%6; int k_lock = rand()%6; g->rooms[k_lock].locked = 1;
+    int k1 = rand()%6; int k2 = rand()%6; g->k_lock = rand()%6; g->rooms[g->k_lock].locked = 1; g->rooms[g->k_lock].password = password();
     for(int k=0; k<6; k++) {
         if(g->rooms[k].type == 1) {
             draw_trophy(g->rooms[k].room_pos.x+g->rooms[k].room_size_h, g->rooms[k].room_pos.y+g->rooms[k].room_size_v);
@@ -602,7 +610,7 @@ void floor_generator(Player *p, Game *g) {
                     }
                     else if(i-g->rooms[k].room_pos.x == g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v && d2) {
                         int new_j = j+rand()%g->rooms[k].room_size_v;
-                        if(k == k_lock) {
+                        if(k == g->k_lock) {
                             mvprintw(new_j, i, "@"); d2 = 0;
                         }
                         else {
@@ -614,7 +622,7 @@ void floor_generator(Player *p, Game *g) {
                 else if(k == 1) {
                     if(g->rooms[k].room_pos.y-j == g->rooms[k].room_size_v && abs(i-g->rooms[k].room_pos.x) <= g->rooms[k].room_size_h && d1) {
                         int new_i = i+rand()%g->rooms[k].room_size_h;
-                        if(k == k_lock) {
+                        if(k == g->k_lock) {
                             mvprintw(j, new_i, "@"); d1 = 0;
                         }
                         else {
@@ -636,7 +644,7 @@ void floor_generator(Player *p, Game *g) {
                     }
                     else if(i-g->rooms[k].room_pos.x == g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v && d2) {
                         int new_j = j+rand()%g->rooms[k].room_size_v;
-                        if(k == k_lock) {
+                        if(k == g->k_lock) {
                             mvprintw(new_j, i, "@"); d2 = 0;
                         }
                         else {
@@ -648,7 +656,7 @@ void floor_generator(Player *p, Game *g) {
                 else if(k == 4) {
                     if(j-g->rooms[k].room_pos.y == g->rooms[k].room_size_v && abs(i-g->rooms[k].room_pos.x) <= g->rooms[k].room_size_h && d1) {
                         int new_i = i+rand()%g->rooms[k].room_size_h;
-                        if(k == k_lock) {
+                        if(k == g->k_lock) {
                             mvprintw(j, new_i, "@"); d1 = 0;
                         }
                         else {
@@ -670,7 +678,7 @@ void floor_generator(Player *p, Game *g) {
                     }
                     else if(g->rooms[k].room_pos.x-i == g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v && d2) {
                         int new_j = j+rand()%g->rooms[k].room_size_v;
-                        if (k == k_lock) {
+                        if (k == g->k_lock) {
                             mvprintw(new_j, i, "@"); d2 = 0;
                         }
                         else {
@@ -770,6 +778,8 @@ void floor_generator(Player *p, Game *g) {
         display_health(g);
         time_t current_time = time(NULL);
         double elapsed_time = difftime(current_time, g->start_time);
+        double password_time = difftime(current_time, g->password_start_time);
+
         if(elapsed_time > 30) {
             if(g->players_hungriness <= 8) {
                 g->players_hungriness += 2;
@@ -779,8 +789,11 @@ void floor_generator(Player *p, Game *g) {
                 g->players_health -= g->players_hungriness/5;
             }
         }
+        if(password_time > 30) {
+            strcpy(message, "Welcome to the Game!");
+        }
         if(g->players_health == 0) {
-            terminate_game(p, g);
+            terminate_game(0, p, g);
         }
         if(display_whole%2 == 1) {
             display_screen(g,"view",visited,screen);
@@ -810,7 +823,16 @@ void floor_generator(Player *p, Game *g) {
                 floor_generator(p,g);
                 break;
             case 2:
-                strcpy(message, password());
+                if(rand()%10 == 9) {
+                    g->rooms[g->k_lock].password = password();
+                }
+                message_to_password(g->rooms[g->k_lock].password);
+                break;
+            case 3:
+                password_screen(g);
+                break;
+            case 4:
+                terminate_game(1, p, g);
                 break;
         }
     }
@@ -932,97 +954,105 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
         case '8':
             character = mvinch(g->player_pos.y-1, g->player_pos.x) & A_CHARTEXT;
             if(character == '<') { return 1; }
+            if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
             if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y-1)) { screen[g->player_pos.x][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
-            if(character == '&' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { g->player_pos.y--; return 2; }
-            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 0) { g->player_pos.y--; return 0; }
+            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.y--; return 2; }
+            if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.y--; return 0; }
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; }
             break;
         case '2':
             character = mvinch(g->player_pos.y+1, g->player_pos.x) & A_CHARTEXT;
             if(character == '<') { return 1; }
+            if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
             if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y+1)) { screen[g->player_pos.x][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
-            if(character == '&' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { g->player_pos.y++; return 2; }
-            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 0) { g->player_pos.y++; return 0; }
+            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.y++; return 2; }
+            if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.y++; return 0; }
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; }
             break;
         case '4':
             character = mvinch(g->player_pos.y, g->player_pos.x-1) & A_CHARTEXT;
             if(character == '<') { return 1; }
+            if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
             if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y)) { screen[g->player_pos.x-1][g->player_pos.y]='^'; g->players_health -= 1; return 0;}
-            if(character == '&' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { g->player_pos.x--; return 2; }
-            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 0) { g->player_pos.x--; return 0; }
+            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x--; return 2; }
+            if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x--; return 0; }
             if (character == '.' || character == '+' || character == '#') { g->player_pos.x--; }
             break;
         case '6':
             character = mvinch(g->player_pos.y, g->player_pos.x+1) & A_CHARTEXT;
             if(character == '<') { return 1; }
+            if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
             if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y)) { screen[g->player_pos.x+1][g->player_pos.y]='^'; g->players_health -= 1; return 0;}
-            if(character == '&' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { g->player_pos.x++; return 2;}
-            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 0) { g->player_pos.x++; return 0;}
+            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x++; return 2;}
+            if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x++; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.x++; }
             break;
         case '9':
             character = mvinch(g->player_pos.y-1, g->player_pos.x+1) & A_CHARTEXT;
             if(character == '<') { return 1; }
+            if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x++; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.y--; g->player_pos.x++; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.y--; g->player_pos.x++; return 0; }
             if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y-1)) { screen[g->player_pos.x+1][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
-            if(character == '&' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { g->player_pos.x++; g->player_pos.y--; return 2;}
-            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 0) { g->player_pos.x++; g->player_pos.y--; return 0;}
+            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x++; g->player_pos.y--; return 2;}
+            if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x++; g->player_pos.y--; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; g->player_pos.x++; }
             break;
         case '7':
             character = mvinch(g->player_pos.y-1, g->player_pos.x-1) & A_CHARTEXT;
             if(character == '<') { return 1; }
+            if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x--; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x--; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x--; return 0; }
             if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y-1)) { screen[g->player_pos.x-1][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
-            if(character == '&' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { g->player_pos.x--; g->player_pos.y--; return 2;}
-            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 0) { g->player_pos.x--; g->player_pos.y--; return 0;}
+            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x--; g->player_pos.y--; return 2;}
+            if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x--; g->player_pos.y--; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; g->player_pos.x--; }
             break;
         case '3':
             character = mvinch(g->player_pos.y+1, g->player_pos.x+1) & A_CHARTEXT;
             if(character == '<') { return 1; }
+            if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x++; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x++; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x++; return 0; }
             if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y+1)) { screen[g->player_pos.x+1][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
-            if(character == '&' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { g->player_pos.x++; g->player_pos.y++; return 2;}
-            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 0) { g->player_pos.x++; g->player_pos.y++; return 0;}
+            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x++; g->player_pos.y++; return 2;}
+            if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x++; g->player_pos.y++; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; g->player_pos.x++; }
             break;
         case '1':
             character = mvinch(g->player_pos.y+1, g->player_pos.x-1) & A_CHARTEXT;
             if(character == '<') { return 1; }
+            if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x--; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x--; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x--; return 0; }
             if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y+1)) { screen[g->player_pos.x-1][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
-            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { g->player_pos.x--; g->player_pos.y++; return 2;}
-            if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].locked == 0) { g->player_pos.x--; g->player_pos.y++; return 0;}
+            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x--; g->player_pos.y++; return 2;}
+            if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x--; g->player_pos.y++; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; g->player_pos.x--; }
             break;
         case 'f':
@@ -1277,7 +1307,7 @@ int check_trap(Room *rooms, int i, int j) {
     return 0;
 }
 
-void terminate_game(Player *p, Game *g) {
+void terminate_game(int code, Player *p, Game *g) {
     p->score += g->players_score;
     p->gold += g->players_gold;
     FILE *accounts = fopen("accounts.txt", "r");
@@ -1301,11 +1331,43 @@ void terminate_game(Player *p, Game *g) {
     fclose(temp_file);
     remove("accounts.txt");
     rename("temp.txt","accounts.txt");
-
-    exit_screen(p);
+    if(code) {
+        you_won_screen(p);
+    }
+    else {
+        you_lost_screen(p);
+    } 
 }
 
-void exit_screen(Player *p) {
+void you_won_screen(Player *p) {
+    clear();
+
+    init_pair(1, COLOR_BLACK, COLOR_GREEN);
+    init_pair(2, COLOR_YELLOW, COLOR_BLACK);
+
+    attron(COLOR_PAIR(2));
+    draw_trophy(COLS/2-6, LINES/2+3);
+    attroff(COLOR_PAIR(2));
+
+    attron(COLOR_PAIR(1));
+    mvprintw(LINES/2,COLS/2-4,"YOU WON!");
+    attroff(COLOR_PAIR(1));
+
+    mvprintw(LINES/2+2,COLS/2-4,"Press Q to EXIT or S to view the SCOREBOARD");
+
+    int ch = getch();
+
+    if(ch == 'q') {
+        endwin();
+        exit(0);
+    }
+    else if(ch == 's') {
+        score_board(p);
+    }
+    you_won_screen(p);
+}
+
+void you_lost_screen(Player *p) {
     clear();
 
     init_pair(1, COLOR_BLACK, COLOR_RED);
@@ -1324,7 +1386,7 @@ void exit_screen(Player *p) {
     else if(ch == 's') {
         score_board(p);
     }
-    exit_screen(p);
+    you_lost_screen(p);
 }
 
 void save_game(Player *p, Game *g, char **screen) {
@@ -1419,10 +1481,61 @@ void food_screen(Game *g) {
     clear();
 }
 
-char *password() {
-    char *password = (char *) malloc(20*sizeof(char));
-    strcpy(password, "password: ");
-    password[10] = rand()%9+49; password[11] = rand()%10+48; password[12] = rand()%10+48; password[13] = rand()%10+48;
-    password[14] = 0;
-    return password;
+void message_to_password(int password) {
+    strcpy(message, "password: ");
+    message[10] = (password/1000)+48; message[11] = (password/100 - (password/1000 * 10))+48; message[12] = ((password%100 - password%10)/10)+48; message[13] = (password%10)+48;
+    message[14] = 0;
+}
+
+void password_screen(Game *g) {
+    clear();
+    echo();
+    curs_set(TRUE);
+
+    int try = 0;
+    char password[5];
+    int reverse = 0;
+    if(rand()%5 == 3) {
+        reverse = 1;
+    }
+    while(try<3) {
+        mvprintw(LINES / 2, COLS / 2 - 12, "Enter the password: ");
+        clrtobot();
+        getnstr(password, 4);
+
+        if(reverse) {
+            char temp_password[5]; temp_password[0] = password[3]; temp_password[1] = password[2]; temp_password[2] = password[1]; temp_password[3] = password[0];
+            strcpy(password, temp_password);
+        }
+
+        if(str_to_num(password) == g->rooms[g->k_lock].password) {
+            g->rooms[g->k_lock].locked = 0;
+            curs_set(FALSE);
+            noecho();
+            break;
+        }
+        else {
+            try++;
+            switch(try) {
+                case 1:
+                    attron(COLOR_PAIR(4));
+                    mvprintw(LINES / 2 - 2, COLS / 2 - 12, "Your first attempt was false.   ");
+                    attroff(COLOR_PAIR(4));
+                    break;
+                case 2:
+                    attron(COLOR_PAIR(7));
+                    mvprintw(LINES / 2 - 2, COLS / 2 - 12, "Your second attempt was false.  ");
+                    attroff(COLOR_PAIR(7));
+                    break;
+                case 3:
+                    attron(COLOR_PAIR(2));
+                    mvprintw(LINES / 2 - 2, COLS / 2 - 12, "Your last try was INCORRECT!    ");
+                    attroff(COLOR_PAIR(2));
+                    curs_set(FALSE);
+                    noecho();
+                    int ch = getch();
+                    break;
+            }        
+        }
+    }        
 }

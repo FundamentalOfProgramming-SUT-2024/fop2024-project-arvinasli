@@ -18,8 +18,7 @@ void draw_rogue() {
 }
 
 void draw_cheese() {
-    init_pair(1, COLOR_YELLOW, COLOR_BLACK);
-    attron(COLOR_PAIR(1));
+    attron(COLOR_PAIR(4));
     mvprintw(2, 1, "       ___");
     mvprintw(3, 1, "     .'o O'-._");
     mvprintw(4, 1, "    / O o_.-`|");
@@ -27,7 +26,7 @@ void draw_cheese() {
     mvprintw(6, 1, "   | o   o .-`");
     mvprintw(7, 1, "   |o O_.-'");
     mvprintw(8, 1, "   '--`");
-    attroff(COLOR_PAIR(1));
+    attroff(COLOR_PAIR(4));
 }
 
 void draw_trophy(int x, int y) {
@@ -129,4 +128,9 @@ const char *txt_format(char username[]) {
     file_name[strlen(username)] = '.'; file_name[strlen(username)+1] = 't';
     file_name[strlen(username)+2] = 'x'; file_name[strlen(username)+3] = 't'; file_name[strlen(username)+4] = 0;
     return file_name;
+}
+
+int password() {
+    int password = (1+rand()%9)*1000+ (rand()%10)*100 + (rand()%10)*10 + (rand()%10);
+    return password;
 }
