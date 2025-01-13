@@ -767,6 +767,12 @@ void floor_generator(Player *p, Game *g) {
     int k = check_room(g->rooms,g->player_pos.x,g->player_pos.y);
     for(int i=g->rooms[k].room_pos.x-g->rooms[k].room_size_h-2; i<=g->rooms[k].room_pos.x+g->rooms[k].room_size_h+2; i++) {
         for(int j=g->rooms[k].room_pos.y-g->rooms[k].room_size_v-2; j<=g->rooms[k].room_pos.y+g->rooms[k].room_size_v+2; j++) {
+            if((k == 0 && i<g->rooms[k].room_pos.x-g->rooms[k].room_size_h) || (k == 0 && j<g->rooms[k].room_pos.y-g->rooms[k].room_size_v)) { continue; }
+            if((k == 1 && i<g->rooms[k].room_pos.x-g->rooms[k].room_size_h) || (k == 1 && j>g->rooms[k].room_pos.y+g->rooms[k].room_size_v)) { continue; }
+            if((k == 2 && j<g->rooms[k].room_pos.y-g->rooms[k].room_size_v) || (k == 3 && j>g->rooms[k].room_pos.y+g->rooms[k].room_size_v)) { continue; }
+            if((k == 4 && i>g->rooms[k].room_pos.x+g->rooms[k].room_size_h) || (k == 4 && j<g->rooms[k].room_pos.y-g->rooms[k].room_size_v)) { continue; }
+            if((k == 5 && i>g->rooms[k].room_pos.x+g->rooms[k].room_size_h) || (k == 5 && j>g->rooms[k].room_pos.y+g->rooms[k].room_size_v)) { continue; }
+            
             visited[i][j] = 1;
         }
     }
@@ -877,43 +883,43 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
     else {
         mvprintw(g->player_pos.y, g->player_pos.x, "#");
         if(abs(g->player_pos.x-g->rooms[0].room_pos.x) <= g->rooms[0].room_size_h+2 && abs(g->player_pos.y-g->rooms[0].room_pos.y) <= g->rooms[0].room_size_v+2) {
-            for(int i=g->rooms[0].room_pos.x-g->rooms[0].room_size_h-2; i<=g->rooms[0].room_pos.x+g->rooms[0].room_size_h+2; i++) {
-                for(int j=g->rooms[0].room_pos.y-g->rooms[0].room_size_v-2; j<=g->rooms[0].room_pos.y+g->rooms[0].room_size_v+2; j++) {
+            for(int i=g->rooms[0].room_pos.x-g->rooms[0].room_size_h; i<=g->rooms[0].room_pos.x+g->rooms[0].room_size_h+2; i++) {
+                for(int j=g->rooms[0].room_pos.y-g->rooms[0].room_size_v; j<=g->rooms[0].room_pos.y+g->rooms[0].room_size_v+2; j++) {
                     visited[i][j] = 1;
                 }
             }
         }
         else if(abs(g->player_pos.x-g->rooms[1].room_pos.x) <= g->rooms[1].room_size_h+2 && abs(g->player_pos.y-g->rooms[1].room_pos.y) <= g->rooms[1].room_size_v+2) {
-            for(int i=g->rooms[1].room_pos.x-g->rooms[1].room_size_h-2; i<=g->rooms[1].room_pos.x+g->rooms[1].room_size_h+2; i++) {
-                for(int j=g->rooms[1].room_pos.y-g->rooms[1].room_size_v-2; j<=g->rooms[1].room_pos.y+g->rooms[1].room_size_v+2; j++) {
+            for(int i=g->rooms[1].room_pos.x-g->rooms[1].room_size_h; i<=g->rooms[1].room_pos.x+g->rooms[1].room_size_h+2; i++) {
+                for(int j=g->rooms[1].room_pos.y-g->rooms[1].room_size_v-2; j<=g->rooms[1].room_pos.y+g->rooms[1].room_size_v; j++) {
                     visited[i][j] = 1;
                 }
             }
         }
         else if(abs(g->player_pos.x-g->rooms[2].room_pos.x) <= g->rooms[2].room_size_h+2 && abs(g->player_pos.y-g->rooms[2].room_pos.y) <= g->rooms[2].room_size_v+2) {
             for(int i=g->rooms[2].room_pos.x-g->rooms[2].room_size_h-2; i<=g->rooms[2].room_pos.x+g->rooms[2].room_size_h+2; i++) {
-                for(int j=g->rooms[2].room_pos.y-g->rooms[2].room_size_v-2; j<=g->rooms[2].room_pos.y+g->rooms[2].room_size_v+2; j++) {
+                for(int j=g->rooms[2].room_pos.y-g->rooms[2].room_size_v; j<=g->rooms[2].room_pos.y+g->rooms[2].room_size_v+2; j++) {
                     visited[i][j] = 1;
                 }
             }
         }
         else if(abs(g->player_pos.x-g->rooms[3].room_pos.x) <= g->rooms[3].room_size_h+2 && abs(g->player_pos.y-g->rooms[3].room_pos.y) <= g->rooms[3].room_size_v+2) {
             for(int i=g->rooms[3].room_pos.x-g->rooms[3].room_size_h-2; i<=g->rooms[3].room_pos.x+g->rooms[3].room_size_h+2; i++) {
-                for(int j=g->rooms[3].room_pos.y-g->rooms[3].room_size_v-2; j<=g->rooms[3].room_pos.y+g->rooms[3].room_size_v+2; j++) {
+                for(int j=g->rooms[3].room_pos.y-g->rooms[3].room_size_v-2; j<=g->rooms[3].room_pos.y+g->rooms[3].room_size_v; j++) {
                     visited[i][j] = 1;
                 }
             }
         }
         else if(abs(g->player_pos.x-g->rooms[4].room_pos.x) <= g->rooms[4].room_size_h+2 && abs(g->player_pos.y-g->rooms[4].room_pos.y) <= g->rooms[4].room_size_v+2) {
-            for(int i=g->rooms[4].room_pos.x-g->rooms[4].room_size_h-2; i<=g->rooms[4].room_pos.x+g->rooms[4].room_size_h+2; i++) {
-                for(int j=g->rooms[4].room_pos.y-g->rooms[4].room_size_v-2; j<=g->rooms[4].room_pos.y+g->rooms[4].room_size_v+2; j++) {
+            for(int i=g->rooms[4].room_pos.x-g->rooms[4].room_size_h-2; i<=g->rooms[4].room_pos.x+g->rooms[4].room_size_h; i++) {
+                for(int j=g->rooms[4].room_pos.y-g->rooms[4].room_size_v; j<=g->rooms[4].room_pos.y+g->rooms[4].room_size_v+2; j++) {
                     visited[i][j] = 1;
                 }
             }
         }
         else if(abs(g->player_pos.x-g->rooms[5].room_pos.x) <= g->rooms[5].room_size_h+2 && abs(g->player_pos.y-g->rooms[5].room_pos.y) <= g->rooms[5].room_size_v+2) {
-            for(int i=g->rooms[5].room_pos.x-g->rooms[5].room_size_h-2; i<=g->rooms[5].room_pos.x+g->rooms[5].room_size_h+2; i++) {
-                for(int j=g->rooms[5].room_pos.y-g->rooms[5].room_size_v-2; j<=g->rooms[5].room_pos.y+g->rooms[5].room_size_v+2; j++) {
+            for(int i=g->rooms[5].room_pos.x-g->rooms[5].room_size_h-2; i<=g->rooms[5].room_pos.x+g->rooms[5].room_size_h; i++) {
+                for(int j=g->rooms[5].room_pos.y-g->rooms[5].room_size_v-2; j<=g->rooms[5].room_pos.y+g->rooms[5].room_size_v; j++) {
                     visited[i][j] = 1;
                 }
             }
