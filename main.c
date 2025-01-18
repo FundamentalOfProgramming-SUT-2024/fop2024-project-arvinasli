@@ -48,6 +48,14 @@ typedef struct {
     int floor_number;
     int players_hungriness;
     int players_ordinary_food;
+    int players_mace;
+    int players_dagger;
+    int players_magic_wand;
+    int players_arrow;
+    int players_sword;
+    int players_health_potion;
+    int players_speed_potion;
+    int players_damage_potion;
     time_t start_time;
     int k_lock;
     time_t password_start_time;
@@ -79,6 +87,8 @@ void not_saved_screen();
 void food_screen(Game *g);
 void message_to_password(int password);
 void password_screen(Game *g);
+void weapon_screen(Game *g);
+void spell_screen(Game *g);
 
 int main() {
     initscr();
@@ -490,6 +500,8 @@ void game_launcher(Player *p, Game *g) {
     init_pair(5, COLOR_MAGENTA, COLOR_BLACK);
     init_pair(6, COLOR_CYAN, COLOR_BLACK);
     init_pair(7, 208, COLOR_BLACK); //Orange
+    init_pair(8, 8, COLOR_BLACK); //Gray
+    init_pair(9, 13, COLOR_BLACK); //Pink
 
     if(g->difficulty) {
         g->MAX_health = 5;
@@ -503,6 +515,14 @@ void game_launcher(Player *p, Game *g) {
     g->floor_number = 1;
     g->players_hungriness = 0;
     g->players_ordinary_food = 0;
+    g->players_mace = 1;
+    g->players_dagger = 0;
+    g->players_magic_wand = 0;
+    g->players_arrow = 0;
+    g->players_sword = 0;
+    g->players_health_potion = 0;
+    g->players_speed_potion = 0;
+    g->players_damage_potion = 0;
     g->start_time = time(NULL);
     g->password_start_time = time(NULL);
 
@@ -822,6 +842,12 @@ void floor_generator(Player *p, Game *g) {
         }
         else if(ch == 'e') {
             food_screen(g);
+        }
+        else if(ch == 'i') {
+            weapon_screen(g);
+        }
+        else if(ch == 'p') {
+            spell_screen(g);
         }
         switch(handle_movement(screen, visited, ch, g)) {
             case 1:
@@ -1483,6 +1509,103 @@ void food_screen(Game *g) {
             }
         }
 
+    }
+    clear();
+}
+
+void weapon_screen(Game *g) {
+    clear();
+
+    draw_sword();
+
+    attron(COLOR_PAIR(1));
+    mvprintw(14, 1, "WEAPONS MENU");
+    attroff(COLOR_PAIR(1));
+
+    mvprintw(14, 20, "You can see weapons you collected during the game here with their special characters");
+    
+
+    const char *weapons[] = {"Mace", "Dagger", "Magic Wand", "Normal Arrow", "Sword", "RETURN"};
+
+    int choose = 0;
+    while (1) {
+        for (int i=0; i<6; i++) {
+            if (i == choose)
+                attron(A_REVERSE);
+            if(i == 0) {
+                mvprintw(16+i, 1, "%s (%d)", weapons[i], g->players_mace);
+            }
+            else {
+                mvprintw(16+i, 1, "%s", weapons[i]);
+            }
+            if (i == choose)
+                attroff(A_REVERSE);
+        }
+
+        int ch = getch();
+        if (ch == KEY_UP && choose != 0)
+            choose--;
+        else if (ch == KEY_DOWN && choose != 5)
+            choose++;
+        else if (ch == 10) {
+            if(choose == 5) {
+                break;
+            }
+        }
+    }
+    clear();
+}
+
+void spell_screen(Game *g) {
+    clear();
+
+    draw_star();
+
+    attron(COLOR_PAIR(5));
+    mvprintw(5, 20, "SPELLS & EXILIRS");
+    attroff(COLOR_PAIR(5));
+
+    mvprintw(6, 20, "You can see spells you collected during the game here / Press enter to use spell");
+
+    const char *spells[] = {"Health Potion", "Speed Potion", "Damage Potion", "RETURN"};
+
+    int choose = 0;
+    while (1) {
+        for (int i=0; i<4; i++) {
+            if (i == choose)
+                attron(A_REVERSE);
+            if(i == 0) {
+                attron(COLOR_PAIR(3));
+                mvprintw(12+i, 1, "%s (%d)", spells[i], g->players_health_potion);
+                attroff(COLOR_PAIR(3));
+            }
+            else if(i == 1) {
+                attron(COLOR_PAIR(6));
+                mvprintw(12+i, 1, "%s (%d)", spells[i], g->players_speed_potion);
+                attroff(COLOR_PAIR(6));
+            }
+            else if(i == 2) {
+                attron(COLOR_PAIR(2));
+                mvprintw(12+i, 1, "%s (%d)", spells[i], g->players_damage_potion);
+                attroff(COLOR_PAIR(2));
+            }
+            else {
+                mvprintw(12+i, 1, "%s", spells[i]);
+            }
+            if (i == choose)
+                attroff(A_REVERSE);
+        }
+
+        int ch = getch();
+        if (ch == KEY_UP && choose != 0)
+            choose--;
+        else if (ch == KEY_DOWN && choose != 3)
+            choose++;
+        else if (ch == 10) {
+            if(choose == 3) {
+                break;
+            }
+        }
     }
     clear();
 }

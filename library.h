@@ -36,6 +36,33 @@ void draw_trophy(int x, int y) {
     mvprintw(y-1, x-5, "_)(_");
 }
 
+void draw_sword() {
+    attron(COLOR_PAIR(8));
+    mvprintw(2, 5, "                           ___");
+    mvprintw(3, 5, "                          ( ((");
+    mvprintw(4, 5, "                           ) ))");
+    mvprintw(5, 5, "  .::.                    / /(");
+    mvprintw(6, 5, " 'M .-;-.-.-.-.-.-.-.-.-/| ((::::::::::::::::::::::::::::::::::::::::::::::.._");
+    mvprintw(7, 5, "(J ( ( ( ( ( ( ( ( ( ( ( |  ))   -====================================-      _.>");
+    mvprintw(8, 5, " `P `-;-`-`-`-`-`-`-`-`-\\| ((::::::::::::::::::::::::::::::::::::::::::::::''");
+    mvprintw(9, 5, "  `::'                    \\ \\(");
+    mvprintw(10, 5, "                           ) ))");
+    mvprintw(11, 5, "                          (_((");
+    attroff(COLOR_PAIR(8));
+}
+
+void draw_star() {
+    attron(COLOR_PAIR(9));
+    mvprintw(2, 2, "       .");
+    mvprintw(3, 2, "  ---./|\\.---");
+    mvprintw(4, 2, "  '._/ | \\_.'");
+    mvprintw(5, 2, "_.-'_'.|.'_'-._");
+    mvprintw(6, 2, " '-._.'|'._.-'");
+    mvprintw(7, 2, "  .' \\ | / '.");
+    mvprintw(8, 2, "  ---'\\|/'---");
+    mvprintw(9, 2, "       '");
+    attroff(COLOR_PAIR(9));
+}
 
 int str_to_num (char *str) {
     int num = 0;
