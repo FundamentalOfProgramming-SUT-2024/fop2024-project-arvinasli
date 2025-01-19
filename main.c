@@ -619,7 +619,7 @@ void floor_generator(Player *p, Game *g) {
                 mvprintw(g->rooms[k].room_pos.y-g->rooms[k].room_size_v+1, g->rooms[k].room_pos.x-g->rooms[k].room_size_h+1, "&");
             }
         }
-        int d1=1; int d2=1; int stairs = 0; int trap = 0; int gold = 0; int dark_gold = 0; int ordinary_food = 0;
+        int d1=1; int d2=1; int stairs = 0; int trap = 0; int gold = 0; int dark_gold = 0; int ordinary_food = 0; int secret_doors = 0;
         for(int j=1; j<LINES; j++) {
             for(int i=0; i<COLS; i++) {
                 if(k == 0) {
@@ -751,11 +751,16 @@ void floor_generator(Player *p, Game *g) {
                             g->rooms[k].traps[trap].x = i; g->rooms[k].traps[trap].y = j;
                             trap++;
                         }
+                        if(k == rand()%6 && k != g->k_lock && rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && secret_doors<1) {
+                            mvprintw(j,i,"?");
+                            secret_doors++;
+                        }
                     }
                     if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && ordinary_food<g->rooms[k].ordinary_food) {
                         mvprintw(j,i,"f");
                         ordinary_food++;
                     }
+                    
                 }
             }
         }
@@ -1243,6 +1248,12 @@ void display_screen(Game *g, char mode[], int **visited, char **screen) {
                         attroff(COLOR_PAIR(3)); attroff(A_REVERSE);
                         continue;
                     }
+                    else if(screen[i][j] == '?') {
+                        attron(COLOR_PAIR(9)); attron(A_REVERSE);
+                        mvprintw(j,i,"%c",screen[i][j]);
+                        attroff(COLOR_PAIR(9)); attroff(A_REVERSE);
+                        continue;
+                    }
                     mvprintw(j,i,"%c",screen[i][j]);
                 }
                 else {
@@ -1308,6 +1319,12 @@ void display_screen(Game *g, char mode[], int **visited, char **screen) {
                     attron(COLOR_PAIR(3)); attron(A_REVERSE);
                     mvprintw(j,i,"%c",screen[i][j]);
                     attroff(COLOR_PAIR(3)); attroff(A_REVERSE);
+                    continue;
+                }
+                else if(screen[i][j] == '?') {
+                    attron(COLOR_PAIR(9)); attron(A_REVERSE);
+                    mvprintw(j,i,"%c",screen[i][j]);
+                    attroff(COLOR_PAIR(9)); attroff(A_REVERSE);
                     continue;
                 }
                 mvprintw(j,i,"%c",screen[i][j]);
