@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_mixer.h>
 #include "library.h"
 
 typedef struct {
@@ -42,6 +44,7 @@ typedef struct {
     Pos player_pos;
     Room rooms[6];
     int MAX_health;
+    int hungriness_rate;
     int players_health;
     int players_score;
     int players_gold;
@@ -94,6 +97,9 @@ void password_screen(Game *g);
 void weapon_screen(Game *g);
 void spell_screen(Game *g);
 void enchant_room(Player *p, Game *g);
+void play_music(const char *filename);
+void stop_music();
+
 
 int main() {
     initscr();
@@ -510,9 +516,11 @@ void game_launcher(Player *p, Game *g) {
 
     if(g->difficulty) {
         g->MAX_health = 5;
+        g->hungriness_rate = 2;
     }
     else {
         g->MAX_health = 10;
+        g->hungriness_rate = 1;
     }
     g->players_health = g->MAX_health;
     g->players_score = 0;
@@ -822,7 +830,7 @@ void floor_generator(Player *p, Game *g) {
 
         if(elapsed_time > 30) {
             if(g->players_hungriness <= 8) {
-                g->players_hungriness += 2;
+                g->players_hungriness += g->hungriness_rate;
             }
             g->start_time = time(NULL);
             if(g->players_hungriness >= 6) {
@@ -881,10 +889,10 @@ void floor_generator(Player *p, Game *g) {
                 terminate_game(1, p, g);
                 break;
             case 5:
-                Pos saved_pos; saved_pos.x = g->player_pos.x; saved_pos.y = g->player_pos.y; int saved_secret_doors_count = g->secret_doors_count;
+                Pos saved_pos; saved_pos.x = g->player_pos.x; saved_pos.y = g->player_pos.y; int saved_secret_doors_count = g->secret_doors_count; Pos saved_first_door; saved_first_door.x = g->secret_doors[0].x; saved_first_door.y = g->secret_doors[0].y;
                 g->enchant_start_time = time(NULL);
                 enchant_room(p, g);
-                g->player_pos.x = saved_pos.x; g->player_pos.y = saved_pos.y; g->secret_doors_count = saved_secret_doors_count;
+                g->player_pos.x = saved_pos.x; g->player_pos.y = saved_pos.y; g->secret_doors_count = saved_secret_doors_count; g->secret_doors[0].x = saved_first_door.x; g->secret_doors[0].y = saved_first_door.y;
                 break;
         }
     }
@@ -1721,6 +1729,8 @@ void password_screen(Game *g) {
 void enchant_room(Player *p, Game *g) {
     clear();
 
+    play_music("creepypiano.mp3");
+
     strcpy(message, "You've entered the ENCHANT ROOM!");
 
     int gold = 1 + rand()%2;
@@ -1828,11 +1838,17 @@ void enchant_room(Player *p, Game *g) {
         time_t current_time = time(NULL);
         double elapsed_time = difftime(current_time, g->enchant_start_time);
 
-        if(elapsed_time > 15) {
+        if(elapsed_time >= 5) {
             g->enchant_start_time = time(NULL);
+            num++;
+        }
+ 
+        if(num == 4) {
             g->players_health -= health_loss;
             health_loss ++;
+            num = 0;
         }
+
         if(g->players_health == 0) {
             terminate_game(0, p, g);
         }
@@ -1861,8 +1877,28 @@ void enchant_room(Player *p, Game *g) {
                 break;
         }
         if(exit) {
+            stop_music();
             break;
         }
-        num++;
     }
+}
+
+void play_music(const char *filename) {
+    if (Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 2, 4096) == -1) {
+        fprintf(stderr, "Mix_OpenAudio: %s", Mix_GetError());
+        exit(1);
+    }
+
+    Mix_Music *music = Mix_LoadMUS(filename);
+    if (!music) {
+        fprintf(stderr, "Mix_LoadMUS: %s", Mix_GetError());
+        exit(1);
+    }
+
+    Mix_PlayMusic(music, -1);
+}
+
+void stop_music() {
+    Mix_HaltMusic();
+    Mix_CloseAudio();
 }

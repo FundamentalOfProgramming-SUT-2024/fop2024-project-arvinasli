@@ -65,7 +65,7 @@ void draw_star() {
 }
 
 void draw_spiral(int num) {
-    if(num%3 == 0) {
+    if(num == 0) {
         attron(COLOR_PAIR(9));
         mvprintw(7, COLS/2+30, "       .");
         mvprintw(8, COLS/2+30, "      /|\\    ");
@@ -76,24 +76,24 @@ void draw_spiral(int num) {
         mvprintw(13, COLS/2+30, "      \\|/    ");
         mvprintw(14, COLS/2+30, "       '");
 
-        mvprintw(7, COLS/2-42, "       .");
-        mvprintw(8, COLS/2-42, "      /|\\    ");
-        mvprintw(9, COLS/2-42, "     / | \\   ");
-        mvprintw(10, COLS/2-42, "     '.|.'     ");
-        mvprintw(11, COLS/2-42, "     .'|'.    ");
-        mvprintw(12, COLS/2-42, "     \\ | /   ");
-        mvprintw(13, COLS/2-42, "      \\|/    ");
-        mvprintw(14, COLS/2-42, "       '");
+        mvprintw(7, COLS/2-45, "       .");
+        mvprintw(8, COLS/2-45, "      /|\\    ");
+        mvprintw(9, COLS/2-45, "     / | \\   ");
+        mvprintw(10, COLS/2-45, "     '.|.'     ");
+        mvprintw(11, COLS/2-45, "     .'|'.    ");
+        mvprintw(12, COLS/2-45, "     \\ | /   ");
+        mvprintw(13, COLS/2-45, "      \\|/    ");
+        mvprintw(14, COLS/2-45, "       '");
         attroff(COLOR_PAIR(9));
     }
     
-    else if(num%3 == 1) {
+    else if(num == 1) {
         attron(COLOR_PAIR(9));
         mvprintw(10, COLS/2+30, "_.-'_'. .'_'-._");
         mvprintw(11, COLS/2+30, " '-._.' '._.-'");
 
-        mvprintw(10, COLS/2-42, "_.-'_'. .'_'-._");
-        mvprintw(11, COLS/2-42, " '-._.' '._.-'");
+        mvprintw(10, COLS/2-45, "_.-'_'. .'_'-._");
+        mvprintw(11, COLS/2-45, " '-._.' '._.-'");
         attroff(COLOR_PAIR(9));
     }
 
@@ -108,14 +108,14 @@ void draw_spiral(int num) {
         mvprintw(13, COLS/2+30, "  ---'\\|/'---");
         mvprintw(14, COLS/2+30, "       '");
 
-        mvprintw(7, COLS/2-42, "       .");
-        mvprintw(8, COLS/2-42, "  ---./|\\.---");
-        mvprintw(9, COLS/2-42, "  '._/ | \\_.'");
-        mvprintw(10, COLS/2-42, "_.-'_'.|.'_'-._");
-        mvprintw(11, COLS/2-42, " '-._.'|'._.-'");
-        mvprintw(12, COLS/2-42, "  .' \\ | / '.");
-        mvprintw(13, COLS/2-42, "  ---'\\|/'---");
-        mvprintw(14, COLS/2-42, "       '");
+        mvprintw(7, COLS/2-45, "       .");
+        mvprintw(8, COLS/2-45, "  ---./|\\.---");
+        mvprintw(9, COLS/2-45, "  '._/ | \\_.'");
+        mvprintw(10, COLS/2-45, "_.-'_'.|.'_'-._");
+        mvprintw(11, COLS/2-45, " '-._.'|'._.-'");
+        mvprintw(12, COLS/2-45, "  .' \\ | / '.");
+        mvprintw(13, COLS/2-45, "  ---'\\|/'---");
+        mvprintw(14, COLS/2-45, "       '");
         attroff(COLOR_PAIR(9));
     }
 }
