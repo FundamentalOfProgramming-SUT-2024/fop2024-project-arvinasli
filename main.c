@@ -35,6 +35,7 @@ typedef struct {
     int gold;
     int dark_gold;
     int ordinary_food;
+    int potion;
 } Room;
 
 typedef struct {
@@ -65,6 +66,7 @@ typedef struct {
     int secret_doors_count;
     Pos secret_doors[3];
     time_t enchant_start_time;
+    int players_weapon;
 } Game;
 
 void login(Player *p);
@@ -76,10 +78,10 @@ void settings(Player *p, Game *g);
 void profile(Player *p);
 void game_launcher(Player *p, Game *g);
 void map_builder(Game *g, int initial_room);
-int handle_movement(char **screen, int **visited, int ch, Game *g);
+int handle_movement(chtype **screen, int **visited, int ch, Game *g);
 void display_health(Game *g);
 void corridor_path(char direction, Pos door1, Pos door2);
-void display_screen(Game *g, char mode[], int **visited, char **screen);
+void display_screen(Game *g, char mode[], int **visited, chtype **screen);
 void floor_generator(Player *p, Game *g);
 int check_room(Room *rooms, int i, int j);
 void display_message(int floor, int score, int gold);
@@ -88,7 +90,7 @@ int check_secret_door(int count, Pos *secret_doors, int i, int j);
 void terminate_game(int code, Player *p, Game *g);
 void you_won_screen(Player *p);
 void you_lost_screen(Player *p);
-void save_game(Player *p, Game *g, char **screen);
+void save_game(Player *p, Game *g, chtype **screen);
 void save_screen();
 void not_saved_screen();
 void food_screen(Game *g);
@@ -528,6 +530,7 @@ void game_launcher(Player *p, Game *g) {
     g->floor_number = 1;
     g->players_hungriness = 0;
     g->players_ordinary_food = 0;
+    g->players_weapon = 0;
     g->players_mace = 1;
     g->players_dagger = 0;
     g->players_magic_wand = 0;
@@ -600,6 +603,7 @@ void floor_generator(Player *p, Game *g) {
             g->rooms[k].gold = 1 + rand()%4;
             g->rooms[k].dark_gold = rand()%2 * rand()%2 * rand()%2;
             g->rooms[k].ordinary_food = 1 + rand()%2;
+            g->rooms[k].potion = rand()%2;
         } 
     }
 
@@ -619,7 +623,8 @@ void floor_generator(Player *p, Game *g) {
         }
     }
 
-    int k1 = rand()%6; int k2 = rand()%6; g->k_lock = rand()%6; g->rooms[g->k_lock].locked = 1; g->rooms[g->k_lock].password = password();  int k_secret_door_1 = rand()%6; int k_secret_door_2 = rand()%6; g->secret_doors_count = 0;
+    int k_stair_1; do { k_stair_1 = rand()%6; } while(k_stair_1 == check_room(g->rooms,g->player_pos.x,g->player_pos.y)); int k_stair_2 = rand()%6; g->k_lock = rand()%6; g->rooms[g->k_lock].locked = 1; g->rooms[g->k_lock].password = password();  int k_secret_door_1 = rand()%6; int k_secret_door_2 = rand()%6; g->secret_doors_count = 0;
+    int k_dagger = rand()%6; int k_magic_wand = rand()%6; int k_arrow = rand()%6; int k_sword = rand()%6;
     for(int k=0; k<6; k++) {
         if(g->rooms[k].type == 1) {
             draw_trophy(g->rooms[k].room_pos.x+g->rooms[k].room_size_h, g->rooms[k].room_pos.y+g->rooms[k].room_size_v);
@@ -632,7 +637,8 @@ void floor_generator(Player *p, Game *g) {
                 mvprintw(g->rooms[k].room_pos.y-g->rooms[k].room_size_v+1, g->rooms[k].room_pos.x-g->rooms[k].room_size_h+1, "&");
             }
         }
-        int d1=1; int d2=1; int stairs = 0; int trap = 0; int gold = 0; int dark_gold = 0; int ordinary_food = 0; int secret_door = 0;
+        int d1=1; int d2=1; int stairs = 0; int trap = 0; int gold = 0; int dark_gold = 0; int ordinary_food = 0; int secret_door = 0; int potion = 0;
+        int dagger = 0; int magic_wand = 0; int arrow = 0; int sword = 0;
         for(int j=1; j<LINES; j++) {
             for(int i=0; i<COLS; i++) {
                 if(k == 0) {
@@ -733,24 +739,49 @@ void floor_generator(Player *p, Game *g) {
                 
                 if(abs(i-g->rooms[k].room_pos.x) < g->rooms[k].room_size_h && abs(j-g->rooms[k].room_pos.y) < g->rooms[k].room_size_v) {
                     if(g->floor_number != 4) {
-                        if((k == k1 || k == k2) && k!=check_room(g->rooms,g->player_pos.x,g->player_pos.y)) {
-                            if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && stairs<1) {
+                        if((k == k_stair_1 || k == k_stair_2) && k!=check_room(g->rooms,g->player_pos.x,g->player_pos.y)) {
+                            if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && stairs<1) {
                                 mvprintw(j, i, "<");
                                 stairs++;
                             }
                         }
+                        if(k == k_secret_door_1 || k == k_secret_door_2) {
+                            if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && secret_door<1) {
+                                g->secret_doors[g->secret_doors_count].x = i; g->secret_doors[g->secret_doors_count].y = j;
+                                secret_door++;
+                                g->secret_doors_count++;
+                            }
+                        }
+                        
                     }
-                    if(k == k_secret_door_1 || k == k_secret_door_2) {
-                        if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && secret_door<1) {
-                            g->secret_doors[g->secret_doors_count].x = i; g->secret_doors[g->secret_doors_count].y = j;
-                            mvprintw(j,i,"?");
-                            secret_door++;
-                            g->secret_doors_count++;
+                    else {
+                        if(k == k_sword) {
+                            if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && sword<1) {
+                                attron(COLOR_PAIR(8)); mvprintw(j,i-1,"="); mvprintw(j,i,")"); mvprintw(j,i+1,"="); mvprintw(j,i+2,">"); attroff(COLOR_PAIR(8));
+                                sword++;
+                            }
+                        }
+                    }
+                    if(k == k_dagger) {
+                        if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && dagger<1) {
+                            mvprintw(j,i,"~");
+                            dagger++;
+                        }
+                    }
+                    if(k == k_magic_wand) {
+                        if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && magic_wand<1) {
+                            attron(COLOR_PAIR(9)); mvprintw(j,i,"!"); attroff(COLOR_PAIR(9));
+                            magic_wand++;
+                        }
+                    }
+                    if(k == k_arrow) {
+                        if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && arrow<1) {
+                            mvprintw(j,i,"}");
+                            arrow++;
                         }
                     }
                     if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && gold<g->rooms[k].gold) {
                         mvprintw(j,i,"o");
-                        i--;
                         gold++;
                     }
                     if(g->rooms[k].type == 1) {
@@ -758,7 +789,7 @@ void floor_generator(Player *p, Game *g) {
                             mvprintw(j,i,"$");
                             dark_gold++;
                         }
-                        if(rand()%10 == 1 && trap<g->rooms[k].traps_count) {
+                        if(rand()%10 == 1 && mvinch(j,i) == '.' && trap<g->rooms[k].traps_count) {
                             g->rooms[k].traps[trap].x = i; g->rooms[k].traps[trap].y = j;
                             trap++;
                         }
@@ -768,7 +799,7 @@ void floor_generator(Player *p, Game *g) {
                             mvprintw(j,i,"$");
                             dark_gold++;
                         }
-                        if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && trap<g->rooms[k].traps_count) {
+                        if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && trap<g->rooms[k].traps_count) {
                             g->rooms[k].traps[trap].x = i; g->rooms[k].traps[trap].y = j;
                             trap++;
                         }
@@ -777,7 +808,25 @@ void floor_generator(Player *p, Game *g) {
                         mvprintw(j,i,"f");
                         ordinary_food++;
                     }
-                    
+                    if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && potion<g->rooms[k].potion) {
+                        int num = rand()%3;
+                        if(num%3 == 0) {
+                            attron(COLOR_PAIR(3));
+                            mvprintw(j, i,"*");
+                            attroff(COLOR_PAIR(3));
+                        }
+                        else if(num%3 == 1) {
+                            attron(COLOR_PAIR(6));
+                            mvprintw(j, i,"*");
+                            attroff(COLOR_PAIR(6));
+                        }
+                        else if(num%3 == 2) {
+                            attron(COLOR_PAIR(2));
+                            mvprintw(j, i,"*");
+                            attroff(COLOR_PAIR(2));
+                        }
+                        potion++;
+                    }
                 }
             }
         }
@@ -790,9 +839,9 @@ void floor_generator(Player *p, Game *g) {
     corridor_path('h',g->rooms[3].doors[1],g->rooms[5].doors[1]);
     corridor_path('v',g->rooms[4].doors[1],g->rooms[5].doors[0]);
 
-    char **screen = (char **) malloc(COLS*sizeof(char*));
+    chtype **screen = (chtype **) malloc(COLS*sizeof(chtype*));
     for(int i=0; i<COLS; i++) {
-        *(screen+i) = (char *) malloc(LINES*sizeof(char));
+        *(screen+i) = (chtype *) malloc(LINES*sizeof(chtype));
     }
     for(int j=1; j<LINES; j++) {
         for(int i=0; i<COLS; i++) {
@@ -833,7 +882,7 @@ void floor_generator(Player *p, Game *g) {
                 g->players_hungriness += g->hungriness_rate;
             }
             g->start_time = time(NULL);
-            if(g->players_hungriness >= 6) {
+            if(g->players_hungriness >= 5) {
                 g->players_health -= g->players_hungriness/5;
             }
         }
@@ -870,6 +919,18 @@ void floor_generator(Player *p, Game *g) {
         }
         else if(ch == 'p') {
             spell_screen(g);
+        }
+        else if(ch == 's') {
+            for(int i = g->player_pos.x-1; i <= g->player_pos.x+1; i++) {
+                for(int j = g->player_pos.y-1; j <= g->player_pos.y+1; j++) {
+                    if(check_secret_door(g->secret_doors_count,g->secret_doors,i,j)) {
+                        screen[i][j] = '?';
+                    }
+                    if(check_trap(g->rooms,i,j)) {
+                        screen[i][j] = '^';
+                    }
+                }
+            }
         }
         switch(handle_movement(screen, visited, ch, g)) {
             case 1:
@@ -922,12 +983,12 @@ void map_builder(Game *g, int initial_room) {
 
 }
 
-int handle_movement(char **screen, int **visited, int ch, Game *g) {
+int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
     int count_dots = 0;
-    char character = mvinch(g->player_pos.y-1, g->player_pos.x) & A_CHARTEXT; if(character == '.') {count_dots++;}
-    character = mvinch(g->player_pos.y+1, g->player_pos.x) & A_CHARTEXT; if(character == '.') {count_dots++;}
-    character = mvinch(g->player_pos.y, g->player_pos.x-1) & A_CHARTEXT; if(character == '.') {count_dots++;}
-    character = mvinch(g->player_pos.y, g->player_pos.x+1) & A_CHARTEXT; if(character == '.') {count_dots++;}
+    chtype character = mvinch(g->player_pos.y-1, g->player_pos.x); if(character == '.') {count_dots++;}
+    character = mvinch(g->player_pos.y+1, g->player_pos.x); if(character == '.') {count_dots++;}
+    character = mvinch(g->player_pos.y, g->player_pos.x-1); if(character == '.') {count_dots++;}
+    character = mvinch(g->player_pos.y, g->player_pos.x+1); if(character == '.') {count_dots++;}
     if(count_dots >= 2) {
         mvprintw(g->player_pos.y, g->player_pos.x, ".");
     }
@@ -1009,10 +1070,10 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
     }
 
 
-
+    short color_pair, foreground, background;
     switch (ch) {
         case '8':
-            character = mvinch(g->player_pos.y-1, g->player_pos.x) & A_CHARTEXT;
+            character = mvinch(g->player_pos.y-1, g->player_pos.x); color_pair = character & A_COLOR; pair_content(color_pair, &foreground, &background); character = character & A_CHARTEXT;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
@@ -1024,9 +1085,11 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
             else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.y--; return 0; }
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; }
+            if(character == '*') { if(foreground == COLOR_GREEN) {g->players_health_potion += 1;} else if(foreground == COLOR_CYAN) {g->players_speed_potion += 1;} else if(foreground == COLOR_RED) {g->players_damage_potion += 1;}
+            screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
             break;
         case '2':
-            character = mvinch(g->player_pos.y+1, g->player_pos.x) & A_CHARTEXT;
+            character = mvinch(g->player_pos.y+1, g->player_pos.x); color_pair = character & A_COLOR; pair_content(color_pair, &foreground, &background); character = character & A_CHARTEXT;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
@@ -1038,9 +1101,11 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
             else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.y++; return 0; }
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; }
+            if(character == '*') { if(foreground == COLOR_GREEN) {g->players_health_potion += 1;} else if(foreground == COLOR_CYAN) {g->players_speed_potion += 1;} else if(foreground == COLOR_RED) {g->players_damage_potion += 1;}
+            screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
             break;
         case '4':
-            character = mvinch(g->player_pos.y, g->player_pos.x-1) & A_CHARTEXT;
+            character = mvinch(g->player_pos.y, g->player_pos.x-1); color_pair = character & A_COLOR; pair_content(color_pair, &foreground, &background); character = character & A_CHARTEXT;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
@@ -1052,9 +1117,11 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
             else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x--; return 0; }
             if (character == '.' || character == '+' || character == '#') { g->player_pos.x--; }
+            if(character == '*') { if(foreground == COLOR_GREEN) {g->players_health_potion += 1;} else if(foreground == COLOR_CYAN) {g->players_speed_potion += 1;} else if(foreground == COLOR_RED) {g->players_damage_potion += 1;}
+            screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
             break;
         case '6':
-            character = mvinch(g->player_pos.y, g->player_pos.x+1) & A_CHARTEXT;
+            character = mvinch(g->player_pos.y, g->player_pos.x+1); color_pair = character & A_COLOR; pair_content(color_pair, &foreground, &background); character = character & A_CHARTEXT;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
@@ -1066,9 +1133,11 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
             else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x++; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.x++; }
+            if(character == '*') { if(foreground == COLOR_GREEN) {g->players_health_potion += 1;} else if(foreground == COLOR_CYAN) {g->players_speed_potion += 1;} else if(foreground == COLOR_RED) {g->players_damage_potion += 1;}
+            screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
             break;
         case '9':
-            character = mvinch(g->player_pos.y-1, g->player_pos.x+1) & A_CHARTEXT;
+            character = mvinch(g->player_pos.y-1, g->player_pos.x+1); color_pair = character & A_COLOR; pair_content(color_pair, &foreground, &background); character = character & A_CHARTEXT;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x++; return 0; }
@@ -1080,9 +1149,11 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
             else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x++; g->player_pos.y--; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; g->player_pos.x++; }
+            if(character == '*') { if(foreground == COLOR_GREEN) {g->players_health_potion += 1;} else if(foreground == COLOR_CYAN) {g->players_speed_potion += 1;} else if(foreground == COLOR_RED) {g->players_damage_potion += 1;}
+            screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.y--; g->player_pos.x++; return 0; }
             break;
         case '7':
-            character = mvinch(g->player_pos.y-1, g->player_pos.x-1) & A_CHARTEXT;
+            character = mvinch(g->player_pos.y-1, g->player_pos.x-1); color_pair = character & A_COLOR; pair_content(color_pair, &foreground, &background); character = character & A_CHARTEXT;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x--; return 0; }
@@ -1094,9 +1165,11 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
             else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x--; g->player_pos.y--; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; g->player_pos.x--; }
+            if(character == '*') { if(foreground == COLOR_GREEN) {g->players_health_potion += 1;} else if(foreground == COLOR_CYAN) {g->players_speed_potion += 1;} else if(foreground == COLOR_RED) {g->players_damage_potion += 1;}
+            screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x--; return 0; }
             break;
         case '3':
-            character = mvinch(g->player_pos.y+1, g->player_pos.x+1) & A_CHARTEXT;
+            character = mvinch(g->player_pos.y+1, g->player_pos.x+1); color_pair = character & A_COLOR; pair_content(color_pair, &foreground, &background); character = character & A_CHARTEXT;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x++; return 0; }
@@ -1108,9 +1181,11 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
             else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x++; g->player_pos.y++; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; g->player_pos.x++; }
+            if(character == '*') { if(foreground == COLOR_GREEN) {g->players_health_potion += 1;} else if(foreground == COLOR_CYAN) {g->players_speed_potion += 1;} else if(foreground == COLOR_RED) {g->players_damage_potion += 1;}
+            screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x++; return 0; }
             break;
         case '1':
-            character = mvinch(g->player_pos.y+1, g->player_pos.x-1) & A_CHARTEXT;
+            character = mvinch(g->player_pos.y+1, g->player_pos.x-1); color_pair = character & A_COLOR; pair_content(color_pair, &foreground, &background); character = character & A_CHARTEXT;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x--; return 0; }
@@ -1122,6 +1197,8 @@ int handle_movement(char **screen, int **visited, int ch, Game *g) {
             if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
             else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x--; g->player_pos.y++; return 0;}
             if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; g->player_pos.x--; }
+            if(character == '*') { if(foreground == COLOR_GREEN) {g->players_health_potion += 1;} else if(foreground == COLOR_CYAN) {g->players_speed_potion += 1;} else if(foreground == COLOR_RED) {g->players_damage_potion += 1;}
+            screen[g->player_pos.x-1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x--; return 0; }
             break;
         case 'f':
             ch = getch();
@@ -1218,7 +1295,7 @@ void corridor_path(char direction, Pos door1, Pos door2) {
   
 }
 
-void display_screen(Game *g, char mode[], int **visited, char **screen) {
+void display_screen(Game *g, char mode[], int **visited, chtype **screen) {
     if(strcmp(mode,"hidden") == 0) {
         for(int j=1; j<LINES; j++) {
             for(int i=0; i<COLS; i++) {
@@ -1285,7 +1362,7 @@ void display_screen(Game *g, char mode[], int **visited, char **screen) {
                         attroff(COLOR_PAIR(9)); attroff(A_REVERSE);
                         continue;
                     }
-                    mvprintw(j,i,"%c",screen[i][j]);
+                    mvaddch(j,i,screen[i][j]);
                 }
                 else {
                     mvprintw(j,i," ");
@@ -1358,7 +1435,7 @@ void display_screen(Game *g, char mode[], int **visited, char **screen) {
                     attroff(COLOR_PAIR(9)); attroff(A_REVERSE);
                     continue;
                 }
-                mvprintw(j,i,"%c",screen[i][j]);
+                mvaddch(j,i,screen[i][j]);
             }
         }
     }   
@@ -1478,7 +1555,7 @@ void you_lost_screen(Player *p) {
     you_lost_screen(p);
 }
 
-void save_game(Player *p, Game *g, char **screen) {
+void save_game(Player *p, Game *g, chtype **screen) {
     if(fopen(txt_format(p->username),"r")) {
         remove(txt_format(p->username));
     }
@@ -1591,6 +1668,18 @@ void weapon_screen(Game *g) {
                 attron(A_REVERSE);
             if(i == 0) {
                 mvprintw(16+i, 1, "%s (%d)", weapons[i], g->players_mace);
+            }
+            else if(i == 1) {
+                mvprintw(16+i, 1, "%s (%d)", weapons[i], g->players_dagger);
+            }
+            else if(i == 2) {
+                mvprintw(16+i, 1, "%s (%d)", weapons[i], g->players_magic_wand);
+            }
+            else if(i == 3) {
+                mvprintw(16+i, 1, "%s (%d)", weapons[i], g->players_arrow);
+            }
+            else if(i == 4) {
+                mvprintw(16+i, 1, "%s (%d)", weapons[i], g->players_sword);
             }
             else {
                 mvprintw(16+i, 1, "%s", weapons[i]);
@@ -1735,9 +1824,7 @@ void enchant_room(Player *p, Game *g) {
 
     int gold = 1 + rand()%2;
     int ordinary_food = 1 + rand()%2;
-    int health_potion = 3 + rand()%2;
-    int speed_potion = 3 + rand()%2;
-    int damage_potion = 2 + rand()%2;
+    int potion = 3 + rand()%4;
 
     int x_center = COLS/2;
     int y_center = LINES/2;
@@ -1761,9 +1848,7 @@ void enchant_room(Player *p, Game *g) {
 
     int count_gold = 0;
     int count_ordinary_food = 0;
-    int count_health_potion = 0;
-    int count_speed_potion = 0;
-    int count_damage_potion = 0;
+    int count_potion = 0;
 
     m = 0;
     for(m; m<20; m++) {
@@ -1776,14 +1861,29 @@ void enchant_room(Player *p, Game *g) {
                 mvprintw(5+m, x_center-m+n,"f");
                 count_ordinary_food++;
             }
-            if(rand()%20 == 0 && mvinch(5+m,x_center-m+n) == '.' && count_health_potion<health_potion) {
-                mvprintw(5+m, x_center-m+n,"*");
-                count_health_potion++;
+            if(rand()%20 == 0 && mvinch(5+m,x_center-m+n) == '.' && count_potion<potion) {
+                int num = rand()%2 + rand()%2;
+                if(num%3 == 0) {
+                    attron(COLOR_PAIR(3));
+                    mvprintw(5+m, x_center-m+n,"*");
+                    attroff(COLOR_PAIR(3));
+                }
+                else if(num%3 == 1) {
+                    attron(COLOR_PAIR(6));
+                    mvprintw(5+m, x_center-m+n,"*");
+                    attroff(COLOR_PAIR(6));
+                }
+                else if(num%3 == 2) {
+                    attron(COLOR_PAIR(2));
+                    mvprintw(5+m, x_center-m+n,"*");
+                    attroff(COLOR_PAIR(2));
+                }
+                count_potion++;
             }
         }
     }
 
-    count_gold = 0; count_ordinary_food = 0; int count_secret_door = 0;
+    count_gold = 0; count_ordinary_food = 0; int count_secret_door = 0; count_potion = 0;
     for(m; m>=0; m--) {
         for(int n=0; n<2*m+2; n++) {
             if(rand()%20 == 0 && mvinch(5+m,x_center-m+n) == '.' && count_gold<gold) {
@@ -1794,9 +1894,24 @@ void enchant_room(Player *p, Game *g) {
                 mvprintw(5+m, x_center-m+n,"f");
                 count_ordinary_food++;
             }
-            if(rand()%20 == 0 && mvinch(5+m,x_center-m+n) == '.' && count_health_potion<health_potion) {
-                mvprintw(5+m, x_center-m+n,"*");
-                count_health_potion++;
+            if(rand()%20 == 0 && mvinch(5+m,x_center-m+n) == '.' && count_potion<potion) {
+                int num = rand()%3;
+                if(num%3 == 0) {
+                    attron(COLOR_PAIR(3));
+                    mvprintw(5+m, x_center-m+n,"*");
+                    attroff(COLOR_PAIR(3));
+                }
+                else if(num%3 == 1) {
+                    attron(COLOR_PAIR(6));
+                    mvprintw(5+m, x_center-m+n,"*");
+                    attroff(COLOR_PAIR(6));
+                }
+                else if(num%3 == 2) {
+                    attron(COLOR_PAIR(2));
+                    mvprintw(5+m, x_center-m+n,"*");
+                    attroff(COLOR_PAIR(2));
+                }
+                count_potion++;
             }
             if(rand()%20 == 0 && mvinch(5+m,x_center-m+n) == '.' && count_secret_door<1) {
                 g->secret_doors_count = 1;
@@ -1807,9 +1922,9 @@ void enchant_room(Player *p, Game *g) {
         }
     }
 
-    char **screen = (char **) malloc(COLS*sizeof(char*));
+    chtype **screen = (chtype **) malloc(COLS*sizeof(chtype*));
     for(int i=0; i<COLS; i++) {
-        *(screen+i) = (char *) malloc(LINES*sizeof(char));
+        *(screen+i) = (chtype *) malloc(LINES*sizeof(chtype));
     }
     for(int j=1; j<LINES; j++) {
         for(int i=0; i<COLS; i++) {
@@ -1831,14 +1946,14 @@ void enchant_room(Player *p, Game *g) {
 
     int num = 0; int exit = 0;
     display_screen(g,"view",visited,screen);
-    int health_loss = 1;
+    int health_loss = 2;
     while(1) {
         display_message(g->floor_number, g->players_score, g->players_gold);
         display_health(g);
         time_t current_time = time(NULL);
         double elapsed_time = difftime(current_time, g->enchant_start_time);
 
-        if(elapsed_time >= 5) {
+        if(elapsed_time >= 4) {
             g->enchant_start_time = time(NULL);
             num++;
         }
