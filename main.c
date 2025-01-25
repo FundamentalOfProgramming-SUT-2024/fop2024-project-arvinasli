@@ -30,7 +30,7 @@ typedef struct {
     int health;
     int damage;
     int speed;
-    int stick_step;
+    int haunt;
 } Monster;
 
 typedef struct {
@@ -122,6 +122,8 @@ void enchant_room(Player *p, Game *g);
 void play_music(const char *filename);
 void stop_music();
 int check_monsters(Game *g, int i, int j);
+void on_monsters(Game *g);
+void handle_movement_monsters(Game *g, chtype **screen);
 
 
 int main() {
@@ -591,9 +593,11 @@ void floor_generator(Player *p, Game *g) {
         strcpy(message, "You're now in the first floor!");
         map_builder(g,6);
         for(int k=0; k<5; k++) {
-            g->rooms[k].monsters_count = 1;
+            g->rooms[k].monsters_count = rand() % 2;
             for(int i=0; i<g->rooms[k].monsters_count; i++) {
                 g->rooms[k].monsters[i].type = 1+rand()%2*rand()%2; g->rooms[k].monsters[i].room = k;
+                if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].speed = 0; g->rooms[k].monsters[i].haunt = 0;}
+                else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].speed = 1; g->rooms[k].monsters[i].haunt = 0;}
             }
         }
     }
@@ -604,6 +608,9 @@ void floor_generator(Player *p, Game *g) {
             g->rooms[k].monsters_count = 1;
             for(int i=0; i<g->rooms[k].monsters_count; i++) {
                 g->rooms[k].monsters[i].type = 1+rand()%3; g->rooms[k].monsters[i].room = k;
+                if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].speed = 0; g->rooms[k].monsters[i].haunt = 0;}
+                else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].speed = 1; g->rooms[k].monsters[i].haunt = 0;}
+                else if(g->rooms[k].monsters[i].type == 3) {g->rooms[k].monsters[i].radius = 5; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 15; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].speed = 1; g->rooms[k].monsters[i].haunt = 5;}
             }
         }
     }
@@ -614,6 +621,10 @@ void floor_generator(Player *p, Game *g) {
             g->rooms[k].monsters_count = 1+rand()%2;
             for(int i=0; i<g->rooms[k].monsters_count; i++) {
                 g->rooms[k].monsters[i].type = 1+rand()%4; g->rooms[k].monsters[i].room = k;
+                if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].speed = 0; g->rooms[k].monsters[i].haunt = 0;}
+                else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].speed = 1; g->rooms[k].monsters[i].haunt = 0;}
+                else if(g->rooms[k].monsters[i].type == 3) {g->rooms[k].monsters[i].radius = 5; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 15; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].speed = 1; g->rooms[k].monsters[i].haunt = 5;}
+                else if(g->rooms[k].monsters[i].type == 4) {g->rooms[k].monsters[i].radius = 5; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 20; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].speed = 1; g->rooms[k].monsters[i].haunt = 100;}
             }
         }
     }
@@ -640,6 +651,11 @@ void floor_generator(Player *p, Game *g) {
                 g->rooms[k].monsters_count = 1+rand()%2;
                 for(int i=0; i<g->rooms[k].monsters_count; i++) {
                     g->rooms[k].monsters[i].type = 1+rand()%5; g->rooms[k].monsters[i].room = k;
+                    if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].speed = 0; g->rooms[k].monsters[i].haunt = 0;}
+                    else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].speed = 1; g->rooms[k].monsters[i].haunt = 0;}
+                    else if(g->rooms[k].monsters[i].type == 3) {g->rooms[k].monsters[i].radius = 5; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 15; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].speed = 1; g->rooms[k].monsters[i].haunt = 5;}
+                    else if(g->rooms[k].monsters[i].type == 4) {g->rooms[k].monsters[i].radius = 5; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 20; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].speed = 1; g->rooms[k].monsters[i].haunt = 100;}
+                    else if(g->rooms[k].monsters[i].type == 4) {g->rooms[k].monsters[i].radius = 10; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 30; g->rooms[k].monsters[i].damage = 2; g->rooms[k].monsters[i].speed = 2; g->rooms[k].monsters[i].haunt = 5;}
                 }
             }
         }
@@ -938,8 +954,11 @@ void floor_generator(Player *p, Game *g) {
         double elapsed_time = difftime(current_time, g->start_time);
         double password_time = difftime(current_time, g->password_start_time);
 
+        on_monsters(g);
+        handle_movement_monsters(g, screen);
+
         if(elapsed_time > 30) {
-            if(g->players_hungriness <= 8) {
+            if(g->players_hungriness < 10) {
                 g->players_hungriness += g->hungriness_rate;
             }
             g->start_time = time(NULL);
@@ -1656,6 +1675,19 @@ int check_monsters(Game *g, int i, int j) {
     return 0;
 }
 
+void on_monsters(Game *g) {
+    for(int k=0; k<6; k++) {
+        for(int m=0; m<g->rooms[k].monsters_count; m++) {
+            if(abs(g->player_pos.x - g->rooms[k].monsters[m].position.x) <= g->rooms[k].monsters[m].radius && abs(g->player_pos.y - g->rooms[k].monsters[m].position.y) <= g->rooms[k].monsters[m].radius) {
+                g->rooms[k].monsters[m].on  = 1;
+            }
+            else {
+                g->rooms[k].monsters[m].on  = 0;
+            }
+        }
+    }
+}
+
 void terminate_game(int code, Player *p, Game *g) {
     p->score += g->players_score;
     p->gold += g->players_gold;
@@ -2224,4 +2256,33 @@ void play_music(const char *filename) {
 void stop_music() {
     Mix_HaltMusic();
     Mix_CloseAudio();
+}
+
+void handle_movement_monsters(Game *g, chtype **screen) {
+    for(int k=0; k<6; k++) {
+        for(int m=0; m<g->rooms[k].monsters_count; m++) {
+            int delta_x;
+            int delta_y;
+            if(g->rooms[k].monsters[m].on) {
+                for(int i=0; i<g->rooms[k].monsters[m].speed; i++) {
+                    if(g->player_pos.x > g->rooms[k].monsters[m].position.x) {
+                        delta_x = 1;
+                    }
+                    else {
+                        delta_x = -1;
+                    }
+                    if(g->player_pos.y > g->rooms[k].monsters[m].position.y) {
+                        delta_y = 1;
+                    }
+                    else {
+                        delta_y = -1;
+                    }
+                    char ch = screen[g->rooms[k].monsters[m].position.x + delta_x][g->rooms[k].monsters[m].position.y + delta_y] & A_CHARTEXT;
+                    if((ch == '.') ||  ((g->rooms[k].monsters[m].type == 3 || g->rooms[k].monsters[m].type == 4) && (ch == '.' || ch == '#'))) {
+                        g->rooms[k].monsters[m].position.x += delta_x; g->rooms[k].monsters[m].position.y += delta_y;
+                    }
+                } 
+            } 
+        }
+    }
 }
