@@ -47,6 +47,7 @@ typedef struct {
     int MAX_health;
     int hungriness_rate;
     int players_health;
+    int players_extra_health;
     int players_score;
     int players_gold;
     int floor_number;
@@ -59,6 +60,7 @@ typedef struct {
     int players_sword;
     int players_health_potion;
     int players_speed_potion;
+    int players_speed;
     int players_damage_potion;
     time_t start_time;
     int k_lock;
@@ -67,6 +69,10 @@ typedef struct {
     Pos secret_doors[3];
     time_t enchant_start_time;
     int players_weapon;
+    int players_steps;
+    int players_speed_step;
+    int players_health_step;
+    int players_damage_step;
 } Game;
 
 void login(Player *p);
@@ -525,6 +531,7 @@ void game_launcher(Player *p, Game *g) {
         g->hungriness_rate = 1;
     }
     g->players_health = g->MAX_health;
+    g->players_extra_health = 0;
     g->players_score = 0;
     g->players_gold = 0;
     g->floor_number = 1;
@@ -538,9 +545,14 @@ void game_launcher(Player *p, Game *g) {
     g->players_sword = 0;
     g->players_health_potion = 0;
     g->players_speed_potion = 0;
+    g->players_speed = 1;
     g->players_damage_potion = 0;
     g->start_time = time(NULL);
     g->password_start_time = time(NULL);
+    g->players_steps = 0;
+    g->players_speed_step = -15;
+    g->players_health_step = -20;
+    g->players_damage_step = -5;
 
     p->count_games++;
 
@@ -812,7 +824,7 @@ void floor_generator(Player *p, Game *g) {
                         int num = rand()%3;
                         if(num%3 == 0) {
                             attron(COLOR_PAIR(3));
-                            mvprintw(j, i,"*");
+                            mvprintw(j, i,"\"");
                             attroff(COLOR_PAIR(3));
                         }
                         else if(num%3 == 1) {
@@ -822,7 +834,7 @@ void floor_generator(Player *p, Game *g) {
                         }
                         else if(num%3 == 2) {
                             attron(COLOR_PAIR(2));
-                            mvprintw(j, i,"*");
+                            mvprintw(j, i,"'");
                             attroff(COLOR_PAIR(2));
                         }
                         potion++;
@@ -889,7 +901,10 @@ void floor_generator(Player *p, Game *g) {
         if(password_time > 30) {
             strcpy(message, "Welcome to the Game!");
         }
-        if(g->players_health == 0) {
+        if(g->players_steps - g->players_speed_step >= 15) {g->players_speed = 1; g->players_speed_step = -15;}
+        if(g->players_steps - g->players_health_step >= 20) {g->players_extra_health = 0; g->players_health_step = -20;}
+        if(g->players_steps - g->players_damage_step >= 5) {g->players_damage_step = -5;}
+        if(g->players_health + g->players_extra_health == 0) {
             terminate_game(0, p, g);
         }
         if(display_whole%2 == 1) {
@@ -985,10 +1000,10 @@ void map_builder(Game *g, int initial_room) {
 
 int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
     int count_dots = 0;
-    chtype character = mvinch(g->player_pos.y-1, g->player_pos.x); if(character == '.') {count_dots++;}
-    character = mvinch(g->player_pos.y+1, g->player_pos.x); if(character == '.') {count_dots++;}
-    character = mvinch(g->player_pos.y, g->player_pos.x-1); if(character == '.') {count_dots++;}
-    character = mvinch(g->player_pos.y, g->player_pos.x+1); if(character == '.') {count_dots++;}
+    chtype character = mvinch(g->player_pos.y-1, g->player_pos.x) & A_CHARTEXT; if(character == '.') {count_dots++;}
+    character = mvinch(g->player_pos.y+1, g->player_pos.x) & A_CHARTEXT; if(character == '.') {count_dots++;}
+    character = mvinch(g->player_pos.y, g->player_pos.x-1) & A_CHARTEXT; if(character == '.') {count_dots++;}
+    character = mvinch(g->player_pos.y, g->player_pos.x+1) & A_CHARTEXT; if(character == '.') {count_dots++;}
     if(count_dots >= 2) {
         mvprintw(g->player_pos.y, g->player_pos.x, ".");
     }
@@ -1069,203 +1084,213 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
         }
     }
 
-
-    short color_pair, foreground, background;
     switch (ch) {
         case '8':
-            character = mvinch(g->player_pos.y-1, g->player_pos.x); color_pair = character & A_COLOR; pair_content(color_pair, &foreground, &background); character = character & A_CHARTEXT;
+            character = mvinch(g->player_pos.y-g->players_speed, g->player_pos.x) & A_CHARTEXT;
+            g->players_steps += 1;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
-            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
-            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
-            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
-            if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y-1)) { screen[g->player_pos.x][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
-            if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x,g->player_pos.y-1)) { screen[g->player_pos.x][g->player_pos.y-1]='?'; return 5;}
-            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.y--; return 2; }
+            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+            if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x][g->player_pos.y-g->players_speed]='^'; g->players_health -= 1; return 0;}
+            if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x][g->player_pos.y-g->players_speed]='?'; return 5;}
+            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.y -= g->players_speed; return 2; }
             if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.y--; return 0; }
-            if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; }
-            if(character == '*') { if(foreground == COLOR_GREEN) {g->players_health_potion += 1;} else if(foreground == COLOR_CYAN) {g->players_speed_potion += 1;} else if(foreground == COLOR_RED) {g->players_damage_potion += 1;}
-            screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
-
-            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
-            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
-            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x][g->player_pos.y-1]='.'; g->player_pos.y--; return 0; }
-            if(character == ')') { g->players_sword += 1; for(int i=-1; i<=3; i++) {screen[g->player_pos.x+i][g->player_pos.y-1]='.';} g->player_pos.y--; return 0; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.y -= g->players_speed; return 0; }
+            if (character == '.' || character == '+' || character == '#') { g->player_pos.y -= g->players_speed; }
+            if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x+i][g->player_pos.y-g->players_speed]='.';} g->player_pos.y -= g->players_speed; return 0; }
             break;
         case '2':
-            character = mvinch(g->player_pos.y+1, g->player_pos.x); color_pair = character & A_COLOR; pair_content(color_pair, &foreground, &background); character = character & A_CHARTEXT;
+            character = mvinch(g->player_pos.y+g->players_speed, g->player_pos.x) & A_CHARTEXT;
+            g->players_steps += 1;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
-            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
-            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
-            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
-            if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y+1)) { screen[g->player_pos.x][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
-            if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x,g->player_pos.y+1)) { screen[g->player_pos.x][g->player_pos.y+1]='?'; return 5;}
-            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.y++; return 2; }
+            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+            if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x][g->player_pos.y+g->players_speed]='^'; g->players_health -= 1; return 0;}
+            if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x][g->player_pos.y+g->players_speed]='?'; return 5;}
+            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.y += g->players_speed; return 2; }
             if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.y++; return 0; }
-            if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; }
-            if(character == '*') { if(foreground == COLOR_GREEN) {g->players_health_potion += 1;} else if(foreground == COLOR_CYAN) {g->players_speed_potion += 1;} else if(foreground == COLOR_RED) {g->players_damage_potion += 1;}
-            screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
-            
-            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
-            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
-            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x][g->player_pos.y+1]='.'; g->player_pos.y++; return 0; }
-            if(character == ')') { g->players_sword += 1; for(int i=-1; i<=3; i++) {screen[g->player_pos.x+i][g->player_pos.y+1]='.';} g->player_pos.y++; return 0; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.y += g->players_speed; return 0; }
+            if (character == '.' || character == '+' || character == '#') { g->player_pos.y += g->players_speed; }
+            if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+            if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x+i][g->player_pos.y+g->players_speed]='.';} g->player_pos.y += g->players_speed; return 0; }
             break;
         case '4':
-            character = mvinch(g->player_pos.y, g->player_pos.x-1); color_pair = character & A_COLOR; pair_content(color_pair, &foreground, &background); character = character & A_CHARTEXT;
+            character = mvinch(g->player_pos.y, g->player_pos.x-g->players_speed) & A_CHARTEXT;
+            g->players_steps += 1;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
-            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
-            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
-            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
-            if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y)) { screen[g->player_pos.x-1][g->player_pos.y]='^'; g->players_health -= 1; return 0;}
-            if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x-1,g->player_pos.y)) { screen[g->player_pos.x-1][g->player_pos.y]='?'; return 5;}
-            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x--; return 2; }
+            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+            if(check_trap(g->rooms,g->player_pos.x-g->players_speed,g->player_pos.y)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y]='^'; g->players_health -= 1; return 0;}
+            if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x-g->players_speed,g->player_pos.y)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y]='?'; return 5;}
+            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x -= g->players_speed; return 2; }
             if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x--; return 0; }
-            if (character == '.' || character == '+' || character == '#') { g->player_pos.x--; }
-            if(character == '*') { if(foreground == COLOR_GREEN) {g->players_health_potion += 1;} else if(foreground == COLOR_CYAN) {g->players_speed_potion += 1;} else if(foreground == COLOR_RED) {g->players_damage_potion += 1;}
-            screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
-            
-            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
-            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
-            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x-1][g->player_pos.y]='.'; g->player_pos.x--; return 0; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x -= g->players_speed; return 0; }
+            if (character == '.' || character == '+' || character == '#') { g->player_pos.x -= g->players_speed; }
+            if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
             break;
         case '6':
-            character = mvinch(g->player_pos.y, g->player_pos.x+1); color_pair = character & A_COLOR; pair_content(color_pair, &foreground, &background); character = character & A_CHARTEXT;
+            character = mvinch(g->player_pos.y, g->player_pos.x+g->players_speed) & A_CHARTEXT;
+            g->players_steps += 1;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
-            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
-            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
-            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
-            if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y)) { screen[g->player_pos.x+1][g->player_pos.y]='^'; g->players_health -= 1; return 0;}
-            if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x+1,g->player_pos.y)) { screen[g->player_pos.x+1][g->player_pos.y]='?'; return 5;}
-            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x++; return 2;}
+            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+            if(check_trap(g->rooms,g->player_pos.x+g->players_speed,g->player_pos.y)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y]='^'; g->players_health -= 1; return 0;}
+            if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x+g->players_speed,g->player_pos.y)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y]='?'; return 5;}
+            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x += g->players_speed; return 2;}
             if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x++; return 0;}
-            if (character == '.' || character == '+' || character == '#') { g->player_pos.x++; }
-            if(character == '*') { if(foreground == COLOR_GREEN) {g->players_health_potion += 1;} else if(foreground == COLOR_CYAN) {g->players_speed_potion += 1;} else if(foreground == COLOR_RED) {g->players_damage_potion += 1;}
-            screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
-
-            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
-            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
-            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.x++; return 0; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x += g->players_speed; return 0;}
+            if (character == '.' || character == '+' || character == '#') { g->player_pos.x += g->players_speed; }
+            if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
             break;
         case '9':
-            character = mvinch(g->player_pos.y-1, g->player_pos.x+1); color_pair = character & A_COLOR; pair_content(color_pair, &foreground, &background); character = character & A_CHARTEXT;
+            character = mvinch(g->player_pos.y-g->players_speed, g->player_pos.x+g->players_speed) & A_CHARTEXT;
+            g->players_steps += 1;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
-            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x++; return 0; }
-            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.y--; g->player_pos.x++; return 0; }
-            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.y--; g->player_pos.x++; return 0; }
-            if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y-1)) { screen[g->player_pos.x+1][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
-            if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x+1,g->player_pos.y-1)) { screen[g->player_pos.x+1][g->player_pos.y-1]='?'; return 5;}
-            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x++; g->player_pos.y--; return 2;}
+            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+            if(check_trap(g->rooms,g->player_pos.x+g->players_speed,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='^'; g->players_health -= 1; return 0;}
+            if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x+g->players_speed,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='?'; return 5;}
+            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 2;}
             if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x++; g->player_pos.y--; return 0;}
-            if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; g->player_pos.x++; }
-            if(character == '*') { if(foreground == COLOR_GREEN) {g->players_health_potion += 1;} else if(foreground == COLOR_CYAN) {g->players_speed_potion += 1;} else if(foreground == COLOR_RED) {g->players_damage_potion += 1;}
-            screen[g->player_pos.x+1][g->player_pos.y]='.'; g->player_pos.y--; g->player_pos.x++; return 0; }
-            
-            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x+1][g->player_pos.y-1]='.'; g->player_pos.x++; g->player_pos.y--; return 0; }
-            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x+1][g->player_pos.y-1]='.'; g->player_pos.x++; g->player_pos.y--; return 0; }
-            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x+1][g->player_pos.y-1]='.'; g->player_pos.x++; g->player_pos.y--; return 0; }
-            if(character == ')') { g->players_sword += 1; for(int i=-1; i<=3; i++) {screen[g->player_pos.x+1+i][g->player_pos.y-1]='.';} g->player_pos.x++; g->player_pos.y--; return 0; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0;}
+            if (character == '.' || character == '+' || character == '#') { g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; }
+            if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x+g->players_speed+i][g->player_pos.y-g->players_speed]='.';} g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
             break;
         case '7':
-            character = mvinch(g->player_pos.y-1, g->player_pos.x-1); color_pair = character & A_COLOR; pair_content(color_pair, &foreground, &background); character = character & A_CHARTEXT;
+            character = mvinch(g->player_pos.y-g->players_speed, g->player_pos.x-g->players_speed) & A_CHARTEXT;
+            g->players_steps += 1;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
-            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x--; return 0; }
-            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x--; return 0; }
-            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x--; return 0; }
-            if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y-1)) { screen[g->player_pos.x-1][g->player_pos.y-1]='^'; g->players_health -= 1; return 0;}
-            if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x-1,g->player_pos.y-1)) { screen[g->player_pos.x-1][g->player_pos.y-1]='?'; return 5;}
-            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x--; g->player_pos.y--; return 2;}
+            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+            if(check_trap(g->rooms,g->player_pos.x-g->players_speed,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='^'; g->players_health -= 1; return 0;}
+            if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x-g->players_speed,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='?'; return 5;}
+            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 2;}
             if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x--; g->player_pos.y--; return 0;}
-            if (character == '.' || character == '+' || character == '#') { g->player_pos.y--; g->player_pos.x--; }
-            if(character == '*') { if(foreground == COLOR_GREEN) {g->players_health_potion += 1;} else if(foreground == COLOR_CYAN) {g->players_speed_potion += 1;} else if(foreground == COLOR_RED) {g->players_damage_potion += 1;}
-            screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.y--; g->player_pos.x--; return 0; }
-            
-            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.x--; g->player_pos.y--; return 0; }
-            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.x--; g->player_pos.y--; return 0; }
-            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x-1][g->player_pos.y-1]='.'; g->player_pos.x--; g->player_pos.y--; return 0; }
-            if(character == ')') { g->players_sword += 1; for(int i=-1; i<=3; i++) {screen[g->player_pos.x-1+i][g->player_pos.y-1]='.';} g->player_pos.x--; g->player_pos.y--; return 0; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0;}
+            if (character == '.' || character == '+' || character == '#') { g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; }
+            if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x-g->players_speed+i][g->player_pos.y-g->players_speed]='.';} g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
             break;
         case '3':
-            character = mvinch(g->player_pos.y+1, g->player_pos.x+1); color_pair = character & A_COLOR; pair_content(color_pair, &foreground, &background); character = character & A_CHARTEXT;
+            character = mvinch(g->player_pos.y+g->players_speed, g->player_pos.x+g->players_speed) & A_CHARTEXT;
+            g->players_steps += 1;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
-            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x++; return 0; }
-            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x++; return 0; }
-            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x++; return 0; }
-            if(check_trap(g->rooms,g->player_pos.x+1,g->player_pos.y+1)) { screen[g->player_pos.x+1][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
-            if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x+1,g->player_pos.y+1)) { screen[g->player_pos.x+1][g->player_pos.y+1]='?'; return 5;}
-            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x++; g->player_pos.y++; return 2;}
+            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+            if(check_trap(g->rooms,g->player_pos.x+g->players_speed,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='^'; g->players_health -= 1; return 0;}
+            if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x+g->players_speed,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='?'; return 5;}
+            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 2;}
             if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x++; g->player_pos.y++; return 0;}
-            if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; g->player_pos.x++; }
-            if(character == '*') { if(foreground == COLOR_GREEN) {g->players_health_potion += 1;} else if(foreground == COLOR_CYAN) {g->players_speed_potion += 1;} else if(foreground == COLOR_RED) {g->players_damage_potion += 1;}
-            screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x++; return 0; }
-            
-            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.x++; g->player_pos.y++; return 0; }
-            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.x++; g->player_pos.y++; return 0; }
-            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.x++; g->player_pos.y++; return 0; }
-            if(character == ')') { g->players_sword += 1; for(int i=-1; i<=3; i++) {screen[g->player_pos.x+1+i][g->player_pos.y+1]='.';} g->player_pos.x++; g->player_pos.y++; return 0; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0;}
+            if (character == '.' || character == '+' || character == '#') { g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; }
+            if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x+g->players_speed+i][g->player_pos.y+g->players_speed]='.';} g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
             break;
         case '1':
-            character = mvinch(g->player_pos.y+1, g->player_pos.x-1); color_pair = character & A_COLOR; pair_content(color_pair, &foreground, &background); character = character & A_CHARTEXT;
+            character = mvinch(g->player_pos.y+g->players_speed, g->player_pos.x-g->players_speed) & A_CHARTEXT;
+            g->players_steps += 1;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
-            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x--; return 0; }
-            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x--; return 0; }
-            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x--; return 0; }
-            if(check_trap(g->rooms,g->player_pos.x-1,g->player_pos.y+1)) { screen[g->player_pos.x-1][g->player_pos.y+1]='^'; g->players_health -= 1; return 0;}
-            if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x-1,g->player_pos.y+1)) { screen[g->player_pos.x-1][g->player_pos.y+1]='?'; return 5;}
-            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x--; g->player_pos.y++; return 2;}
+            if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+            if(check_trap(g->rooms,g->player_pos.x-g->players_speed,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='^'; g->players_health -= 1; return 0;}
+            if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x-g->players_speed,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='?'; return 5;}
+            if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 2;}
             if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x--; g->player_pos.y++; return 0;}
-            if (character == '.' || character == '+' || character == '#') { g->player_pos.y++; g->player_pos.x--; }
-            if(character == '*') { if(foreground == COLOR_GREEN) {g->players_health_potion += 1;} else if(foreground == COLOR_CYAN) {g->players_speed_potion += 1;} else if(foreground == COLOR_RED) {g->players_damage_potion += 1;}
-            screen[g->player_pos.x-1][g->player_pos.y+1]='.'; g->player_pos.y++; g->player_pos.x--; return 0; }
-            
-            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.x--; g->player_pos.y++; return 0; }
-            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.x--; g->player_pos.y++; return 0; }
-            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x+1][g->player_pos.y+1]='.'; g->player_pos.x--; g->player_pos.y++; return 0; }
-            if(character == ')') { g->players_sword += 1; for(int i=-1; i<=3; i++) {screen[g->player_pos.x-1+i][g->player_pos.y+1]='.';} g->player_pos.x--; g->player_pos.y++; return 0; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0;}
+            if (character == '.' || character == '+' || character == '#') { g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; }
+            if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x-g->players_speed+i][g->player_pos.y+g->players_speed]='.';} g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
             break;
         case 'f':
             ch = getch();
             if(ch == '8') {
-                character = mvinch(g->player_pos.y-1, g->player_pos.x);
+                character = mvinch(g->player_pos.y-1, g->player_pos.x) & A_CHARTEXT;
                 while(character == '.' || character == '+' || character == '#') {
+                    g->players_steps += 1;
                     g->player_pos.y--;
-                    character = mvinch(g->player_pos.y-1, g->player_pos.x);
+                    character = mvinch(g->player_pos.y-1, g->player_pos.x) & A_CHARTEXT;
                 }
             }
             else if(ch == '2') {
-                character = mvinch(g->player_pos.y+1, g->player_pos.x);
+                character = mvinch(g->player_pos.y+1, g->player_pos.x) & A_CHARTEXT;
                 while(character == '.' || character == '+' || character == '#') {
+                    g->players_steps += 1;
                     g->player_pos.y++;
-                    character = mvinch(g->player_pos.y+1, g->player_pos.x);
+                    character = mvinch(g->player_pos.y+1, g->player_pos.x) & A_CHARTEXT;
                 }
             }
             else if(ch == '4') {
-                character = mvinch(g->player_pos.y, g->player_pos.x-1);
+                character = mvinch(g->player_pos.y, g->player_pos.x-1) & A_CHARTEXT;
                 while(character == '.' || character == '+' || character == '#') {
+                    g->players_steps += 1;
                     g->player_pos.x--;
-                    character = mvinch(g->player_pos.y, g->player_pos.x-1);
+                    character = mvinch(g->player_pos.y, g->player_pos.x-1) & A_CHARTEXT;
                 }
             }
             else if(ch == '6') {
-                character = mvinch(g->player_pos.y, g->player_pos.x+1);
+                character = mvinch(g->player_pos.y, g->player_pos.x+1) & A_CHARTEXT;
                 while(character == '.' || character == '+' || character == '#') {
+                    g->players_steps += 1;
                     g->player_pos.x++;
-                    character = mvinch(g->player_pos.y, g->player_pos.x+1);
+                    character = mvinch(g->player_pos.y, g->player_pos.x+1) & A_CHARTEXT;
                 }
             }
             break;
@@ -1279,10 +1304,18 @@ void display_health(Game *g) {
     mvprintw(0, COLS-2*g->MAX_health-2, "[");
     int count_hearts = g->players_health;
     attron(COLOR_PAIR(2));
-    for(int i=0; i<count_hearts; i++) {
+    int i=0;
+    for(i; i<count_hearts; i++) {
         mvprintw(0, COLS-2*g->MAX_health-1+2*i, "<3");
     }
     attroff(COLOR_PAIR(2));
+    int count_extra_hearts = g->players_extra_health;
+    attron(COLOR_PAIR(3));
+    int j = 0;
+    for(i; j<count_extra_hearts; i++, j++) {
+        mvprintw(0, COLS-2*g->MAX_health-1+2*i, "<3");
+    }
+    attroff(COLOR_PAIR(3));
     mvprintw(0, COLS-1, "]");
 
 }
@@ -1790,7 +1823,24 @@ void spell_screen(Game *g) {
         else if (ch == KEY_DOWN && choose != 3)
             choose++;
         else if (ch == 10) {
-            if(choose == 3) {
+            if(choose == 0 && g->players_health_potion > 0 && g->players_health != 10) {
+                g->players_health_step = g->players_steps;
+                g->players_extra_health++;
+                g->players_health_potion--;
+                break;
+            }
+            else if(choose == 1 && g->players_speed_potion > 0) {
+                g->players_speed_step = g->players_steps;
+                g->players_speed = 2;
+                g->players_speed_potion--;
+                break;
+            }
+            else if(choose == 2 && g->players_damage_potion > 0) {
+                g->players_damage_step = g->players_steps;
+                g->players_damage_potion--;
+                break;
+            }
+            else if(choose == 3) {
                 break;
             }
         }
@@ -1907,7 +1957,7 @@ void enchant_room(Player *p, Game *g) {
                 int num = rand()%2 + rand()%2;
                 if(num%3 == 0) {
                     attron(COLOR_PAIR(3));
-                    mvprintw(5+m, x_center-m+n,"*");
+                    mvprintw(5+m, x_center-m+n,"\"");
                     attroff(COLOR_PAIR(3));
                 }
                 else if(num%3 == 1) {
@@ -1917,7 +1967,7 @@ void enchant_room(Player *p, Game *g) {
                 }
                 else if(num%3 == 2) {
                     attron(COLOR_PAIR(2));
-                    mvprintw(5+m, x_center-m+n,"*");
+                    mvprintw(5+m, x_center-m+n,"'");
                     attroff(COLOR_PAIR(2));
                 }
                 count_potion++;
@@ -1940,7 +1990,7 @@ void enchant_room(Player *p, Game *g) {
                 int num = rand()%3;
                 if(num%3 == 0) {
                     attron(COLOR_PAIR(3));
-                    mvprintw(5+m, x_center-m+n,"*");
+                    mvprintw(5+m, x_center-m+n,"\"");
                     attroff(COLOR_PAIR(3));
                 }
                 else if(num%3 == 1) {
@@ -1950,7 +2000,7 @@ void enchant_room(Player *p, Game *g) {
                 }
                 else if(num%3 == 2) {
                     attron(COLOR_PAIR(2));
-                    mvprintw(5+m, x_center-m+n,"*");
+                    mvprintw(5+m, x_center-m+n,"'");
                     attroff(COLOR_PAIR(2));
                 }
                 count_potion++;
@@ -2006,7 +2056,11 @@ void enchant_room(Player *p, Game *g) {
             num = 0;
         }
 
-        if(g->players_health == 0) {
+        if(g->players_steps - g->players_speed_step >= 15) {g->players_speed = 1; g->players_speed_step = -15;}
+        if(g->players_steps - g->players_health_step >= 20) {g->players_extra_health = 0; g->players_health_step = -20;}
+        if(g->players_steps - g->players_damage_step >= 5) {g->players_damage_step = -5;}
+
+        if(g->players_health + g->players_extra_health == 0) {
             terminate_game(0, p, g);
         }
 
