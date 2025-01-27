@@ -22,6 +22,7 @@ typedef struct {
 } Player;
 
 typedef struct {
+    int alive;
     int type;
     int room;
     Pos position;
@@ -82,6 +83,7 @@ typedef struct {
     Pos secret_doors[3];
     time_t enchant_start_time;
     int players_weapon;
+    int players_weapon_direction;
     int players_steps;
     int players_speed_step;
     int players_health_step;
@@ -122,7 +124,10 @@ void play_music(const char *filename);
 void stop_music();
 int check_monsters(Game *g, int i, int j);
 void handle_movement_monsters(Game *g, chtype **screen);
+void handle_monsters(Game *g, chtype **screen);
 int is_next(Pos a, Pos b);
+void handle_weapons(Game *g, char ch, chtype **screen);
+void shoot_weapon(Game *g, char ch, chtype **screen);
 
 int main() {
     initscr();
@@ -554,6 +559,7 @@ void game_launcher(Player *p, Game *g) {
     g->players_hungriness = 0;
     g->players_ordinary_food = 0;
     g->players_weapon = -1;
+    g->players_weapon_direction = 5;
     g->players_mace = 1;
     g->players_dagger = 0;
     g->players_magic_wand = 0;
@@ -593,7 +599,7 @@ void floor_generator(Player *p, Game *g) {
         for(int k=0; k<5; k++) {
             g->rooms[k].monsters_count = rand() % 2;
             for(int i=0; i<g->rooms[k].monsters_count; i++) {
-                g->rooms[k].monsters[i].type = 1+rand()%2*rand()%2; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].room = k;
+                g->rooms[k].monsters[i].type = 1+rand()%2*rand()%2; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].room = k;
                 if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 0;}
                 else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 3;}
             }
@@ -605,7 +611,7 @@ void floor_generator(Player *p, Game *g) {
         for(int k=0; k<6; k++) {
             g->rooms[k].monsters_count = 1;
             for(int i=0; i<g->rooms[k].monsters_count; i++) {
-                g->rooms[k].monsters[i].type = 1+rand()%3; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].room = k;
+                g->rooms[k].monsters[i].type = 1+rand()%3; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].room = k;
                 if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1;  g->rooms[k].monsters[i].haunt = 0;}
                 else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 3;}
                 else if(g->rooms[k].monsters[i].type == 3) {g->rooms[k].monsters[i].radius = 4; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 15; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 5;}
@@ -618,7 +624,7 @@ void floor_generator(Player *p, Game *g) {
         for(int k=0; k<6; k++) {
             g->rooms[k].monsters_count = 1+rand()%2;
             for(int i=0; i<g->rooms[k].monsters_count; i++) {
-                g->rooms[k].monsters[i].type = 1+rand()%4; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].room = k;
+                g->rooms[k].monsters[i].type = 1+rand()%4; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].room = k;
                 if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1;g->rooms[k].monsters[i].haunt = 0;}
                 else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 3;}
                 else if(g->rooms[k].monsters[i].type == 3) {g->rooms[k].monsters[i].radius = 4; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 15; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 5;}
@@ -648,7 +654,7 @@ void floor_generator(Player *p, Game *g) {
             else {
                 g->rooms[k].monsters_count = 1+rand()%2;
                 for(int i=0; i<g->rooms[k].monsters_count; i++) {
-                    g->rooms[k].monsters[i].type = 1+rand()%5; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].room = k;
+                    g->rooms[k].monsters[i].type = 1+rand()%5; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].room = k;
                     if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 0;}
                     else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 3;}
                     else if(g->rooms[k].monsters[i].type == 3) {g->rooms[k].monsters[i].radius = 4; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].health = 15; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 5;}
@@ -1001,7 +1007,10 @@ void floor_generator(Player *p, Game *g) {
             spell_screen(g);
         }
 
+        handle_monsters(g, screen);
         handle_movement_monsters(g, screen);
+
+        handle_weapons(g, ch, screen);
 
         display_health(g);
 
@@ -1443,30 +1452,44 @@ void display_screen(Game *g, char mode[], int **visited, chtype **screen) {
         for(int j=1; j<LINES; j++) {
             for(int i=0; i<COLS; i++) {
                 if(visited[i][j]) {
-                    switch(check_monsters(g, i, j)) {
-                        case 0:
-                            break;
-                        case 1:
-                            mvprintw(j,i,"D");
-                            continue;
-                        case 2:
-                            attron(COLOR_PAIR(7));
-                            mvprintw(j,i,"F");
-                            attroff(COLOR_PAIR(7));
-                            continue;
-                        case 3:
-                            mvprintw(j,i,"G");
-                            continue;
-                        case 4:
-                            attron(COLOR_PAIR(10));
-                            mvprintw(j,i,"S");
-                            attroff(COLOR_PAIR(10));
-                            continue;
-                        case 5:
-                            attron(COLOR_PAIR(8));
-                            mvprintw(j,i,"U");
-                            attroff(COLOR_PAIR(8));
-                            continue;
+                    if(check_monsters(g, i, j)) {
+                        int boolean = 0;
+                        int room = check_room(g->rooms, i, j);
+                        for(int m=0; m<g->rooms[room].monsters_count; m++) {
+                            if(g->rooms[room].monsters[m].position.x == i && g->rooms[room].monsters[m].position.y == j) {
+                                if(g->rooms[room].monsters[m].alive) {
+                                    switch(g->rooms[room].monsters[m].type) {
+                                        case 1:
+                                            mvprintw(j,i,"D");
+                                            boolean = 1;
+                                            break;
+                                        case 2:
+                                            attron(COLOR_PAIR(7));
+                                            mvprintw(j,i,"F");
+                                            attroff(COLOR_PAIR(7));
+                                            boolean = 1;
+                                            break;
+                                        case 3:
+                                            mvprintw(j,i,"G");
+                                            boolean = 1;
+                                            break;
+                                        case 4:
+                                            attron(COLOR_PAIR(10));
+                                            mvprintw(j,i,"S");
+                                            attroff(COLOR_PAIR(10));
+                                            boolean = 1;
+                                            break;
+                                        case 5:
+                                            attron(COLOR_PAIR(8));
+                                            mvprintw(j,i,"U");
+                                            attroff(COLOR_PAIR(8));
+                                            boolean = 1;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if(boolean) {continue;}
                     }
                     if(g->rooms[check_room(g->rooms,i,j)].type == 1) {
                         if(screen[i][j] == '.') {
@@ -1541,30 +1564,44 @@ void display_screen(Game *g, char mode[], int **visited, chtype **screen) {
     else {
         for(int j=1; j<LINES; j++) {
             for(int i=0; i<COLS; i++) {
-                switch(check_monsters(g, i, j)) {
-                    case 0:
-                        break;
-                    case 1:
-                        mvprintw(j,i,"D");
-                        continue;
-                    case 2:
-                        attron(COLOR_PAIR(7));
-                        mvprintw(j,i,"F");
-                        attroff(COLOR_PAIR(7));
-                        continue;
-                    case 3:
-                        mvprintw(j,i,"G");
-                        continue;
-                    case 4:
-                        attron(COLOR_PAIR(10));
-                        mvprintw(j,i,"S");
-                        attroff(COLOR_PAIR(10));
-                        continue;
-                    case 5:
-                        attron(COLOR_PAIR(8));
-                        mvprintw(j,i,"U");
-                        attroff(COLOR_PAIR(8));
-                        continue;
+                if(check_monsters(g, i, j)) {
+                    int boolean = 0;
+                    int room = check_room(g->rooms, i, j);
+                    for(int m=0; m<g->rooms[room].monsters_count; m++) {
+                        if(g->rooms[room].monsters[m].position.x == i && g->rooms[room].monsters[m].position.y == j) {
+                            if(g->rooms[room].monsters[m].alive) {
+                                switch(g->rooms[room].monsters[m].type) {
+                                    case 1:
+                                        mvprintw(j,i,"D");
+                                        boolean = 1;
+                                        break;
+                                    case 2:
+                                        attron(COLOR_PAIR(7));
+                                        mvprintw(j,i,"F");
+                                        attroff(COLOR_PAIR(7));
+                                        boolean = 1;
+                                        break;
+                                    case 3:
+                                        mvprintw(j,i,"G");
+                                        boolean = 1;
+                                        break;
+                                    case 4:
+                                        attron(COLOR_PAIR(10));
+                                        mvprintw(j,i,"S");
+                                        attroff(COLOR_PAIR(10));
+                                        boolean = 1;
+                                        break;
+                                    case 5:
+                                        attron(COLOR_PAIR(8));
+                                        mvprintw(j,i,"U");
+                                        attroff(COLOR_PAIR(8));
+                                        boolean = 1;
+                                       break;
+                                }
+                            }
+                        }
+                    }
+                    if(boolean) {continue;}
                 }
                 if(g->rooms[check_room(g->rooms,i,j)].type == 1) {
                     if(screen[i][j] == '.') {
@@ -1973,6 +2010,9 @@ void weapon_screen(Game *g) {
                 strcpy(message, "You have to put your last weapon in the backpack first");
             }
         }
+        else {
+            strcpy(message, "You pressed an invalid key                         ");
+        }
     }
     clear();
 }
@@ -2314,9 +2354,12 @@ void stop_music() {
     Mix_CloseAudio();
 }
 
-void handle_movement_monsters(Game *g, chtype **screen) {
+void handle_monsters(Game *g, chtype **screen) {
     for(int k=0; k<6; k++) {
         for(int m=0; m<g->rooms[k].monsters_count; m++) {
+            if(g->rooms[k].monsters[m].alive == 0) {
+                g->rooms[k].monsters[m].on  = 0;
+            }
             if(k != check_room(g->rooms, g->player_pos.x, g->player_pos.y)) {
                 g->rooms[k].monsters[m].on  = 0;
             }
@@ -2325,9 +2368,16 @@ void handle_movement_monsters(Game *g, chtype **screen) {
                     g->rooms[k].monsters[m].on  = 1;
                 }
             }
+        }
+    }
+}
+
+void handle_movement_monsters(Game *g, chtype **screen) {
+    for(int k=0; k<6; k++) {
+        for(int m=0; m<g->rooms[k].monsters_count; m++) {
             int delta_x;
             int delta_y;
-            if(g->rooms[k].monsters[m].on) {
+            if(g->rooms[k].monsters[m].alive && g->rooms[k].monsters[m].on) {
                 if(g->rooms[k].monsters[m].haunt < 0) {
                     if(g->rooms[k].monsters[m].type == 1) {
                         g->rooms[k].monsters[m].on = 0;
@@ -2420,3 +2470,137 @@ int is_next(Pos a, Pos b) {
     }
     return 0;
 }
+
+void handle_weapons(Game *g, char ch, chtype **screen) {
+    if (ch == 'w') {
+        g->players_weapon = -1;
+    }
+    else if (ch == 'z') {
+        if(g->players_mace > 0 && (g->players_weapon == -1 || g->players_weapon == 0)) {
+            g->players_weapon = 0;
+            strcpy(message, "weapon changed to mace");
+        }
+        else if(g->players_mace == 0) {
+            strcpy(message, "You have no mace");
+        }
+        else {
+            strcpy(message, "put in the backpack first");
+        }
+    }
+    else if (ch == 'x') {
+        if(g->players_sword > 0 && (g->players_weapon == -1 || g->players_weapon == 1)) {
+            g->players_weapon = 1;
+            strcpy(message, "weapon changed to sword");
+        }
+        else if(g->players_sword == 0) {
+            strcpy(message, "You have no sword");
+        }
+        else {
+            strcpy(message, "put in the backpack first");
+        }
+    }
+    else if (ch == 'c') {
+        if(g->players_dagger > 0 && (g->players_weapon == -1 || g->players_weapon == 2)) {
+            g->players_weapon = 2;
+            strcpy(message, "weapon changed to dagger");
+        }
+        else if(g->players_dagger == 0) {
+            strcpy(message, "You have no dagger");
+        }
+        else {
+            strcpy(message, "put in the backpack first");
+        }
+    }
+    else if (ch == 'v') {
+        if(g->players_magic_wand > 0 && (g->players_weapon == -1 || g->players_weapon == 3)) {
+            g->players_weapon = 3;
+            strcpy(message, "weapon changed to magic wand");
+        }
+        else if(g->players_magic_wand == 0) {
+            strcpy(message, "You have no magic wand");
+        }
+        else {
+            strcpy(message, "put in the backpack first");
+        }
+    }
+    else if (ch == 'b') {
+        if(g->players_arrow > 0 && (g->players_weapon == -1 || g->players_weapon == 4)) {
+            g->players_weapon = 4;
+            strcpy(message, "weapon changed to arrow");
+        }
+        else if(g->players_arrow == 0) {
+            strcpy(message, "You have no arrow");
+        }
+        else {
+            strcpy(message, "put in the backpack first");
+        }
+    }
+    if (ch == ' ') {
+        if(g->players_weapon == 0 || g->players_weapon == 1) {
+            for(int i=g->player_pos.x-1; i<=g->player_pos.x+1; i++) {
+                for(int j=g->player_pos.y-1; j<=g->player_pos.y+1; j++) {
+                    int k = check_room(g->rooms, i, j);
+                    for(int m=0; m<g->rooms[k].monsters_count; m++) {
+                        if(g->rooms[k].monsters[m].position.x == i && g->rooms[k].monsters[m].position.y == j) {
+                            if(g->players_weapon == 0) {g->rooms[k].monsters[m].health -= 5;}
+                            else {g->rooms[k].monsters[m].health -= 10;}
+                            int type = check_monsters(g, i, j);
+                            if(type == 1) {strcpy(message, "You scored an excellent hit on Daemon"); g->players_score += 5;}
+                            else if(type == 2) {strcpy(message, "You scored an excellent hit on Fire Breathing Monster"); g->players_score += 5;}
+                            else if(type == 3) {strcpy(message, "You scored an excellent hit on Giant"); g->players_score += 5;}
+                            else if(type == 4) {strcpy(message, "You scored an excellent hit on Snake"); g->players_score += 10;}
+                            else if(type == 5) {strcpy(message, "You scored an excellent hit on Undead"); g->players_score += 10;}
+                            if(g->rooms[k].monsters[m].health <= 0) {
+                                g->rooms[k].monsters[m].alive = 0;
+                                g->players_score += 20;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            ch = getch();
+            g->players_weapon_direction = ch;
+            shoot_weapon(g, ch, screen);
+        }
+    }
+    if (ch == 'a') {
+        shoot_weapon(g, g->players_weapon_direction, screen);
+    }
+    else {
+        return;
+    }
+}
+
+void shoot_weapon(Game *g, char ch, chtype **screen) {
+    if(ch == '6') {
+
+    }
+    else if(ch == '4') {
+        
+    }
+    else if(ch == '8') {
+        
+    }
+    else if(ch == '2') {
+        
+    }
+    else if(ch == '9') {
+        
+    }
+    else if(ch == '7') {
+        
+    }
+    else if(ch == '3') {
+        
+    }
+    else if(ch == '1') {
+        
+    }
+    else {
+        return;
+    }
+}
+
+
