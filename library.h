@@ -29,11 +29,27 @@ void draw_cheese() {
     attroff(COLOR_PAIR(4));
 }
 
-void draw_trophy(int x, int y) {
+void draw_trophy(int color, int x, int y) {
+    attron(COLOR_PAIR(color));
     mvprintw(y-4, x-4, "__");
     mvprintw(y-3, x-6, "(|  |)");
     mvprintw(y-2, x-5, "(  )");
     mvprintw(y-1, x-5, "_)(_");
+    attroff(COLOR_PAIR(color));
+}
+
+void draw_big_trophy(int color) {
+    attron(COLOR_PAIR(color));
+    mvprintw(1, COLS/2-7, "  ___________");
+    mvprintw(2, COLS/2-7, " '._==_==_=_.'");
+    mvprintw(3, COLS/2-7, " .-\\:      /-.");
+    mvprintw(4, COLS/2-7, "| (|:.     |) |");
+    mvprintw(5, COLS/2-7, " '-|:.     |-'");
+    mvprintw(6, COLS/2-7, "   \\::.    /");
+    mvprintw(7, COLS/2-7, "    '::. .'");
+    mvprintw(8, COLS/2-7, "      ) (");
+    mvprintw(9, COLS/2-7, "    _.' '._");
+    attroff(COLOR_PAIR(color));
 }
 
 void draw_sword() {
