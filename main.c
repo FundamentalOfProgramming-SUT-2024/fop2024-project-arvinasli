@@ -89,6 +89,8 @@ typedef struct {
     int players_speed_step;
     int players_health_step;
     int players_damage_step;
+    Pos weapons[3];
+    int players_damage_rate;
 } Game;
 
 void login(Player *p);
@@ -129,6 +131,7 @@ void handle_monsters(Game *g, chtype **screen);
 int is_next(Pos a, Pos b);
 void handle_weapons(Game *g, char ch, chtype **screen);
 void shoot_weapon(Game *g, char ch, chtype **screen);
+int check_weapons(Pos *weapons, int i, int j);
 
 int main() {
     initscr();
@@ -577,6 +580,7 @@ void game_launcher(Player *p, Game *g) {
     g->players_speed_step = -15;
     g->players_health_step = -20;
     g->players_damage_step = -5;
+    g->players_damage_rate = 1;
 
     p->count_games++;
 
@@ -865,18 +869,21 @@ void floor_generator(Player *p, Game *g) {
                     if(k == k_dagger) {
                         if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && !check_trap(g->rooms,i,j) && !check_secret_door(g->secret_doors_count,g->secret_doors,i,j) && dagger<1) {
                             mvprintw(j,i,"~");
+                            g->weapons[0].x = i;  g->weapons[0].y = j;
                             dagger++;
                         }
                     }
                     if(k == k_magic_wand) {
                         if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && !check_trap(g->rooms,i,j) && !check_secret_door(g->secret_doors_count,g->secret_doors,i,j) && magic_wand<1) {
                             attron(COLOR_PAIR(9)); mvprintw(j,i,"!"); attroff(COLOR_PAIR(9));
+                            g->weapons[1].x = i;  g->weapons[1].y = j;
                             magic_wand++;
                         }
                     }
                     if(k == k_arrow) {
                         if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && mvinch(j,i) == '.' && !check_trap(g->rooms,i,j) && !check_secret_door(g->secret_doors_count,g->secret_doors,i,j) && arrow<1) {
                             mvprintw(j,i,"}");
+                            g->weapons[2].x = i;  g->weapons[2].y = j;
                             arrow++;
                         }
                     }
@@ -976,7 +983,7 @@ void floor_generator(Player *p, Game *g) {
         }
         if(g->players_steps - g->players_speed_step >= 15) {g->players_speed = 1; g->players_speed_step = -15;}
         if(g->players_steps - g->players_health_step >= 20) {g->players_extra_health = 0; g->players_health_step = -20;}
-        if(g->players_steps - g->players_damage_step >= 5) {g->players_damage_step = -5;}
+        if(g->players_steps - g->players_damage_step >= 5) {g->players_damage_rate = 1; g->players_damage_step = -5;}
         if(g->players_health + g->players_extra_health == 0) {
             terminate_game(0, p, g);
         }
@@ -1185,9 +1192,9 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
             if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
             if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y-g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y-g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y-g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
             if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x+i][g->player_pos.y-g->players_speed]='.';} g->player_pos.y -= g->players_speed; return 0; }
             break;
         case '2':
@@ -1207,9 +1214,9 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
             if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
             if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
-            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
-            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
-            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y+g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y+g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y+g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
             if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x+i][g->player_pos.y+g->players_speed]='.';} g->player_pos.y += g->players_speed; return 0; }
             break;
         case '4':
@@ -1229,9 +1236,9 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
             if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
             if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
-            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
-            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
-            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+            if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
             break;
         case '6':
             character = mvinch(g->player_pos.y, g->player_pos.x+g->players_speed) & A_CHARTEXT;
@@ -1250,9 +1257,9 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
             if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
             if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
-            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
-            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
-            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+            if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
             break;
         case '9':
             character = mvinch(g->player_pos.y-g->players_speed, g->player_pos.x+g->players_speed) & A_CHARTEXT;
@@ -1271,9 +1278,9 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
             if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
             if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
-            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y-g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y-g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y-g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
             if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x+g->players_speed+i][g->player_pos.y-g->players_speed]='.';} g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
             break;
         case '7':
@@ -1293,9 +1300,9 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
             if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
             if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
-            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y-g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y-g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+            if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y-g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
             if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x-g->players_speed+i][g->player_pos.y-g->players_speed]='.';} g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
             break;
         case '3':
@@ -1315,9 +1322,9 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
             if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
             if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
-            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
-            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
-            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y+g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y+g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y+g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
             if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x+g->players_speed+i][g->player_pos.y+g->players_speed]='.';} g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
             break;
         case '1':
@@ -1337,9 +1344,9 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
             if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
             if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
-            if(character == '~') { g->players_dagger += 10; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
-            if(character == '!') { g->players_magic_wand += 8; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
-            if(character == '}') { g->players_arrow += 20; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y+g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y+g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y+g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
             if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x-g->players_speed+i][g->player_pos.y+g->players_speed]='.';} g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
             break;
         case 'f':
@@ -1682,11 +1689,10 @@ int check_room(Room *rooms, int i, int j) {
 }
 
 void display_message(Game *g, int floor, int score, int gold) {
-    mvprintw(0,0,"%s FLOOR:%d   SCORE:%d    GOLD:%d                 ", message, floor, score, gold);
+    mvprintw(0,0,"%s FLOOR:%d   SCORE:%d    GOLD:%d                     ", message, floor, score, gold);
     const char *messages[] = {"Welcome to the Game!", "Press e to view the food menu!", "Press i/p to view the weapons/spell menu!", "You can press s to locate traps around you!"};
     int step = g->players_steps - g->players_message_step;
     if(step%40 == 0) {
-        g->players_message_step = g->players_steps;
         int i = (step/40)%4;
         strcpy(message, messages[i]);
     }
@@ -1892,7 +1898,9 @@ void food_screen(Game *g) {
                 break;
             }
         }
-
+        else {
+            break;
+        }
     }
     clear();
 }
@@ -2086,6 +2094,7 @@ void spell_screen(Game *g) {
             }
             else if(choose == 2 && g->players_damage_potion > 0) {
                 g->players_damage_step = g->players_steps;
+                g->players_damage_rate = 2;
                 g->players_damage_potion--;
                 break;
             }
@@ -2556,8 +2565,8 @@ void handle_weapons(Game *g, char ch, chtype **screen) {
                     int k = check_room(g->rooms, i, j);
                     for(int m=0; m<g->rooms[k].monsters_count; m++) {
                         if(g->rooms[k].monsters[m].position.x == i && g->rooms[k].monsters[m].position.y == j) {
-                            if(g->players_weapon == 0) {g->rooms[k].monsters[m].health -= 5;}
-                            else {g->rooms[k].monsters[m].health -= 10;}
+                            if(g->players_weapon == 0) {g->rooms[k].monsters[m].health -= g->players_damage_rate*5;}
+                            else {g->rooms[k].monsters[m].health -= g->players_damage_rate*10;}
                             int type = check_monsters(g, i, j);
                             if(type == 1) {strcpy(message, "You scored an excellent hit on Daemon"); g->players_score += 5;}
                             else if(type == 2) {strcpy(message, "You scored an excellent hit on Fire Breathing Monster"); g->players_score += 5;}
@@ -2605,9 +2614,9 @@ void shoot_weapon(Game *g, char ch, chtype **screen) {
             int shot = 0;
             for(int m=0; m<g->rooms[k].monsters_count; m++) {
                 if(g->rooms[k].monsters[m].position.x == i && g->rooms[k].monsters[m].position.y == j) {
-                    if(g->players_weapon == 2) {g->players_dagger -= 1; g->rooms[k].monsters[m].health -= 12;}
-                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= 15;}
-                    else if(g->players_weapon == 4) {g->players_arrow -= 1; g->rooms[k].monsters[m].health -= 5;}
+                    if(g->players_weapon == 2) {g->players_dagger -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*12;}
+                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*15;}
+                    else if(g->players_weapon == 4) {g->players_arrow -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*5;}
                     int type = check_monsters(g, i, j);
                     if(type == 1) {strcpy(message, "You scored an excellent hit on Daemon"); g->players_score += 5;}
                     else if(type == 2) {strcpy(message, "You scored an excellent hit on Fire Breathing Monster"); g->players_score += 5;}
@@ -2638,9 +2647,9 @@ void shoot_weapon(Game *g, char ch, chtype **screen) {
             int shot = 0;
             for(int m=0; m<g->rooms[k].monsters_count; m++) {
                 if(g->rooms[k].monsters[m].position.x == i && g->rooms[k].monsters[m].position.y == j) {
-                    if(g->players_weapon == 2) {g->players_dagger -= 1; g->rooms[k].monsters[m].health -= 12;}
-                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= 15;}
-                    else if(g->players_weapon == 4) {g->players_arrow -= 1; g->rooms[k].monsters[m].health -= 5;}
+                    if(g->players_weapon == 2) {g->players_dagger -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*12;}
+                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*15;}
+                    else if(g->players_weapon == 4) {g->players_arrow -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*5;}
                     int type = check_monsters(g, i, j);
                     if(type == 1) {strcpy(message, "You scored an excellent hit on Daemon"); g->players_score += 5;}
                     else if(type == 2) {strcpy(message, "You scored an excellent hit on Fire Breathing Monster"); g->players_score += 5;}
@@ -2671,9 +2680,9 @@ void shoot_weapon(Game *g, char ch, chtype **screen) {
             int shot = 0;
             for(int m=0; m<g->rooms[k].monsters_count; m++) {
                 if(g->rooms[k].monsters[m].position.x == i && g->rooms[k].monsters[m].position.y == j) {
-                    if(g->players_weapon == 2) {g->players_dagger -= 1; g->rooms[k].monsters[m].health -= 12;}
-                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= 15;}
-                    else if(g->players_weapon == 4) {g->players_arrow -= 1; g->rooms[k].monsters[m].health -= 5;}
+                    if(g->players_weapon == 2) {g->players_dagger -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*12;}
+                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*15;}
+                    else if(g->players_weapon == 4) {g->players_arrow -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*5;}
                     int type = check_monsters(g, i, j);
                     if(type == 1) {strcpy(message, "You scored an excellent hit on Daemon"); g->players_score += 5;}
                     else if(type == 2) {strcpy(message, "You scored an excellent hit on Fire Breathing Monster"); g->players_score += 5;}
@@ -2704,9 +2713,9 @@ void shoot_weapon(Game *g, char ch, chtype **screen) {
             int shot = 0;
             for(int m=0; m<g->rooms[k].monsters_count; m++) {
                 if(g->rooms[k].monsters[m].position.x == i && g->rooms[k].monsters[m].position.y == j) {
-                    if(g->players_weapon == 2) {g->players_dagger -= 1; g->rooms[k].monsters[m].health -= 12;}
-                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= 15;}
-                    else if(g->players_weapon == 4) {g->players_arrow -= 1; g->rooms[k].monsters[m].health -= 5;}
+                    if(g->players_weapon == 2) {g->players_dagger -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*12;}
+                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*15;}
+                    else if(g->players_weapon == 4) {g->players_arrow -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*5;}
                     int type = check_monsters(g, i, j);
                     if(type == 1) {strcpy(message, "You scored an excellent hit on Daemon"); g->players_score += 5;}
                     else if(type == 2) {strcpy(message, "You scored an excellent hit on Fire Breathing Monster"); g->players_score += 5;}
@@ -2733,4 +2742,11 @@ void shoot_weapon(Game *g, char ch, chtype **screen) {
     }
 }
 
-
+int check_weapons(Pos *weapons, int i, int j) {
+    for(int w=0; w<3; w++) {
+        if(weapons[w].x == i && weapons[w].y == j) {
+            return 1;
+        }
+    }
+    return 0;
+}
