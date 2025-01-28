@@ -974,9 +974,6 @@ void floor_generator(Player *p, Game *g) {
                 g->players_health -= g->players_hungriness/5;
             }
         }
-        if(password_time > 30) {
-            strcpy(message, "Welcome to the Game!");
-        }
         if(g->players_steps - g->players_speed_step >= 15) {g->players_speed = 1; g->players_speed_step = -15;}
         if(g->players_steps - g->players_health_step >= 20) {g->players_extra_health = 0; g->players_health_step = -20;}
         if(g->players_steps - g->players_damage_step >= 5) {g->players_damage_step = -5;}
@@ -1688,9 +1685,9 @@ void display_message(Game *g, int floor, int score, int gold) {
     mvprintw(0,0,"%s FLOOR:%d   SCORE:%d    GOLD:%d                 ", message, floor, score, gold);
     const char *messages[] = {"Welcome to the Game!", "Press e to view the food menu!", "Press i/p to view the weapons/spell menu!", "You can press s to locate traps around you!"};
     int step = g->players_steps - g->players_message_step;
-    if(step%20 == 0) {
+    if(step%40 == 0) {
         g->players_message_step = g->players_steps;
-        int i = (step/20)%4;
+        int i = (step/40)%4;
         strcpy(message, messages[i]);
     }
 }
@@ -2569,12 +2566,11 @@ void handle_weapons(Game *g, char ch, chtype **screen) {
                             else if(type == 5) {strcpy(message, "You scored an excellent hit on Undead"); g->players_score += 10;}
                             if(g->rooms[k].monsters[m].health <= 0) {
                                 g->rooms[k].monsters[m].alive = 0;
-                                g->players_score += 20;
-                                if(g->rooms[k].monsters[m].type == 1) {strcpy(message, "You killed the Daemon!");}
-                                else if(g->rooms[k].monsters[m].type == 2) {strcpy(message, "You killed the Fire Breathing Monster!");}
-                                else if(g->rooms[k].monsters[m].type == 3) {strcpy(message, "You killed the Giant!");}
-                                else if(g->rooms[k].monsters[m].type == 4) {strcpy(message, "You killed the Snake!");}
-                                else if(g->rooms[k].monsters[m].type == 5) {strcpy(message, "You killed the Undead!");}
+                                if(g->rooms[k].monsters[m].type == 1) {strcpy(message, "You killed the Daemon!"); g->players_score += 10;}
+                                else if(g->rooms[k].monsters[m].type == 2) {strcpy(message, "You killed the Fire Breathing Monster!"); g->players_score += 10;}
+                                else if(g->rooms[k].monsters[m].type == 3) {strcpy(message, "You killed the Giant!"); g->players_score += 10;}
+                                else if(g->rooms[k].monsters[m].type == 4) {strcpy(message, "You killed the Snake!"); g->players_score += 20;}
+                                else if(g->rooms[k].monsters[m].type == 5) {strcpy(message, "You killed the Undead!"); g->players_score += 20;}
                             }
                         }
                     }
@@ -2596,29 +2592,141 @@ void handle_weapons(Game *g, char ch, chtype **screen) {
 }
 
 void shoot_weapon(Game *g, char ch, chtype **screen) {
+    int range;
+    if(g->players_weapon == 2) {range = 5;}
+    else if(g->players_weapon == 3) {range = 10;}
+    else if(g->players_weapon == 4) {range = 5;}
     if(ch == '6') {
-
+        for(int i=g->player_pos.x; i<=g->player_pos.x+range; i++) {
+            int j=g->player_pos.y;
+            char character = screen[i][j] & A_CHARTEXT;
+            if(character == '|' || character == 'O' || character == '+') {if(g->players_weapon == 2) {g->players_dagger -= 1; screen[i-1][j] = '~';} else if(g->players_weapon == 3) {g->players_magic_wand -= 1; screen[i-1][j] = ('!' | COLOR_PAIR(5));} else if(g->players_weapon == 4) {g->players_arrow -= 1; screen[i-1][j] = '}';} break;}
+            int k = check_room(g->rooms, i, j);
+            int shot = 0;
+            for(int m=0; m<g->rooms[k].monsters_count; m++) {
+                if(g->rooms[k].monsters[m].position.x == i && g->rooms[k].monsters[m].position.y == j) {
+                    if(g->players_weapon == 2) {g->players_dagger -= 1; g->rooms[k].monsters[m].health -= 12;}
+                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= 15;}
+                    else if(g->players_weapon == 4) {g->players_arrow -= 1; g->rooms[k].monsters[m].health -= 5;}
+                    int type = check_monsters(g, i, j);
+                    if(type == 1) {strcpy(message, "You scored an excellent hit on Daemon"); g->players_score += 5;}
+                    else if(type == 2) {strcpy(message, "You scored an excellent hit on Fire Breathing Monster"); g->players_score += 5;}
+                    else if(type == 3) {strcpy(message, "You scored an excellent hit on Giant"); g->players_score += 5;}
+                    else if(type == 4) {strcpy(message, "You scored an excellent hit on Snake"); g->players_score += 10;}
+                    else if(type == 5) {strcpy(message, "You scored an excellent hit on Undead"); g->players_score += 10;}
+                    if(g->rooms[k].monsters[m].health <= 0) {
+                        g->rooms[k].monsters[m].alive = 0;
+                        if(g->rooms[k].monsters[m].type == 1) {strcpy(message, "You killed the Daemon!"); g->players_score += 10;}
+                        else if(g->rooms[k].monsters[m].type == 2) {strcpy(message, "You killed the Fire Breathing Monster!"); g->players_score += 10;}
+                        else if(g->rooms[k].monsters[m].type == 3) {strcpy(message, "You killed the Giant!"); g->players_score += 10;}
+                        else if(g->rooms[k].monsters[m].type == 4) {strcpy(message, "You killed the Snake!"); g->players_score += 20;}
+                        else if(g->rooms[k].monsters[m].type == 5) {strcpy(message, "You killed the Undead!"); g->players_score += 20;}
+                    }
+                    shot = 1;
+                }
+            }
+            if(shot) {break;}
+            if(i == g->player_pos.x+range) {if(g->players_weapon == 2) {g->players_dagger -= 1; screen[i][j] = '~';} else if(g->players_weapon == 3) {g->players_magic_wand -= 1; screen[i][j] = ('!' | COLOR_PAIR(5));} else if(g->players_weapon == 4) {g->players_arrow -= 1; screen[i][j] = '}';}}
+        }
     }
     else if(ch == '4') {
-        
-    }
-    else if(ch == '8') {
-        
+        for(int i=g->player_pos.x; i>=g->player_pos.x-range; i--) {
+            int j=g->player_pos.y;
+            char character = screen[i][j] & A_CHARTEXT;
+            if(character == '|' || character == 'O' || character == '+') {if(g->players_weapon == 2) {g->players_dagger -= 1; screen[i+1][j] = '~';} else if(g->players_weapon == 3) {g->players_magic_wand -= 1; screen[i+1][j] = ('!' | COLOR_PAIR(5));} else if(g->players_weapon == 4) {g->players_arrow -= 1; screen[i+1][j] = '}';} break;}
+            int k = check_room(g->rooms, i, j);
+            int shot = 0;
+            for(int m=0; m<g->rooms[k].monsters_count; m++) {
+                if(g->rooms[k].monsters[m].position.x == i && g->rooms[k].monsters[m].position.y == j) {
+                    if(g->players_weapon == 2) {g->players_dagger -= 1; g->rooms[k].monsters[m].health -= 12;}
+                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= 15;}
+                    else if(g->players_weapon == 4) {g->players_arrow -= 1; g->rooms[k].monsters[m].health -= 5;}
+                    int type = check_monsters(g, i, j);
+                    if(type == 1) {strcpy(message, "You scored an excellent hit on Daemon"); g->players_score += 5;}
+                    else if(type == 2) {strcpy(message, "You scored an excellent hit on Fire Breathing Monster"); g->players_score += 5;}
+                    else if(type == 3) {strcpy(message, "You scored an excellent hit on Giant"); g->players_score += 5;}
+                    else if(type == 4) {strcpy(message, "You scored an excellent hit on Snake"); g->players_score += 10;}
+                    else if(type == 5) {strcpy(message, "You scored an excellent hit on Undead"); g->players_score += 10;}
+                    if(g->rooms[k].monsters[m].health <= 0) {
+                        g->rooms[k].monsters[m].alive = 0;
+                        if(g->rooms[k].monsters[m].type == 1) {strcpy(message, "You killed the Daemon!"); g->players_score += 10;}
+                        else if(g->rooms[k].monsters[m].type == 2) {strcpy(message, "You killed the Fire Breathing Monster!"); g->players_score += 10;}
+                        else if(g->rooms[k].monsters[m].type == 3) {strcpy(message, "You killed the Giant!"); g->players_score += 10;}
+                        else if(g->rooms[k].monsters[m].type == 4) {strcpy(message, "You killed the Snake!"); g->players_score += 20;}
+                        else if(g->rooms[k].monsters[m].type == 5) {strcpy(message, "You killed the Undead!"); g->players_score += 20;}
+                    }
+                    shot = 1;
+                }
+            }
+            if(shot) {break;}
+            if(i == g->player_pos.x-range) {if(g->players_weapon == 2) {g->players_dagger -= 1; screen[i][j] = '~';} else if(g->players_weapon == 3) {g->players_magic_wand -= 1; screen[i][j] = ('!' | COLOR_PAIR(5));} else if(g->players_weapon == 4) {g->players_arrow -= 1; screen[i][j] = '}';}}
+        }
     }
     else if(ch == '2') {
-        
+        for(int j=g->player_pos.y; j<=g->player_pos.y+range; j++) {
+            int i=g->player_pos.x;
+            char character = screen[i][j] & A_CHARTEXT;
+            if(character == '-' || character == 'O' || character == '+') {if(g->players_weapon == 2) {g->players_dagger -= 1; screen[i][j-1] = '~';} else if(g->players_weapon == 3) {g->players_magic_wand -= 1; screen[i][j-1] = ('!' | COLOR_PAIR(5));} else if(g->players_weapon == 4) {g->players_arrow -= 1; screen[i][j-1] = '}';} break;}
+            int k = check_room(g->rooms, i, j);
+            int shot = 0;
+            for(int m=0; m<g->rooms[k].monsters_count; m++) {
+                if(g->rooms[k].monsters[m].position.x == i && g->rooms[k].monsters[m].position.y == j) {
+                    if(g->players_weapon == 2) {g->players_dagger -= 1; g->rooms[k].monsters[m].health -= 12;}
+                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= 15;}
+                    else if(g->players_weapon == 4) {g->players_arrow -= 1; g->rooms[k].monsters[m].health -= 5;}
+                    int type = check_monsters(g, i, j);
+                    if(type == 1) {strcpy(message, "You scored an excellent hit on Daemon"); g->players_score += 5;}
+                    else if(type == 2) {strcpy(message, "You scored an excellent hit on Fire Breathing Monster"); g->players_score += 5;}
+                    else if(type == 3) {strcpy(message, "You scored an excellent hit on Giant"); g->players_score += 5;}
+                    else if(type == 4) {strcpy(message, "You scored an excellent hit on Snake"); g->players_score += 10;}
+                    else if(type == 5) {strcpy(message, "You scored an excellent hit on Undead"); g->players_score += 10;}
+                    if(g->rooms[k].monsters[m].health <= 0) {
+                        g->rooms[k].monsters[m].alive = 0;
+                        if(g->rooms[k].monsters[m].type == 1) {strcpy(message, "You killed the Daemon!"); g->players_score += 10;}
+                        else if(g->rooms[k].monsters[m].type == 2) {strcpy(message, "You killed the Fire Breathing Monster!"); g->players_score += 10;}
+                        else if(g->rooms[k].monsters[m].type == 3) {strcpy(message, "You killed the Giant!"); g->players_score += 10;}
+                        else if(g->rooms[k].monsters[m].type == 4) {strcpy(message, "You killed the Snake!"); g->players_score += 20;}
+                        else if(g->rooms[k].monsters[m].type == 5) {strcpy(message, "You killed the Undead!"); g->players_score += 20;}
+                    }
+                    shot = 1;
+                }
+            }
+            if(shot) {break;}
+            if(j == g->player_pos.y+range) {if(g->players_weapon == 2) {g->players_dagger -= 1; screen[i][j] = '~';} else if(g->players_weapon == 3) {g->players_magic_wand -= 1; screen[i][j] = ('!' | COLOR_PAIR(5));} else if(g->players_weapon == 4) {g->players_arrow -= 1; screen[i][j] = '}';}}
+        }
     }
-    else if(ch == '9') {
-        
-    }
-    else if(ch == '7') {
-        
-    }
-    else if(ch == '3') {
-        
-    }
-    else if(ch == '1') {
-        
+    else if(ch == '8') {
+        for(int j=g->player_pos.y; j>=g->player_pos.y-range; j--) {
+            int i=g->player_pos.x;
+            char character = screen[i][j] & A_CHARTEXT;
+            if(character == '-' || character == 'O' || character == '+') {if(g->players_weapon == 2) {g->players_dagger -= 1; screen[i][j+1] = '~';} else if(g->players_weapon == 3) {g->players_magic_wand -= 1; screen[i][j+1] = ('!' | COLOR_PAIR(5));} else if(g->players_weapon == 4) {g->players_arrow -= 1; screen[i][j+1] = '}';} break;}
+            int k = check_room(g->rooms, i, j);
+            int shot = 0;
+            for(int m=0; m<g->rooms[k].monsters_count; m++) {
+                if(g->rooms[k].monsters[m].position.x == i && g->rooms[k].monsters[m].position.y == j) {
+                    if(g->players_weapon == 2) {g->players_dagger -= 1; g->rooms[k].monsters[m].health -= 12;}
+                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= 15;}
+                    else if(g->players_weapon == 4) {g->players_arrow -= 1; g->rooms[k].monsters[m].health -= 5;}
+                    int type = check_monsters(g, i, j);
+                    if(type == 1) {strcpy(message, "You scored an excellent hit on Daemon"); g->players_score += 5;}
+                    else if(type == 2) {strcpy(message, "You scored an excellent hit on Fire Breathing Monster"); g->players_score += 5;}
+                    else if(type == 3) {strcpy(message, "You scored an excellent hit on Giant"); g->players_score += 5;}
+                    else if(type == 4) {strcpy(message, "You scored an excellent hit on Snake"); g->players_score += 10;}
+                    else if(type == 5) {strcpy(message, "You scored an excellent hit on Undead"); g->players_score += 10;}
+                    if(g->rooms[k].monsters[m].health <= 0) {
+                        g->rooms[k].monsters[m].alive = 0;
+                        if(g->rooms[k].monsters[m].type == 1) {strcpy(message, "You killed the Daemon!"); g->players_score += 10;}
+                        else if(g->rooms[k].monsters[m].type == 2) {strcpy(message, "You killed the Fire Breathing Monster!"); g->players_score += 10;}
+                        else if(g->rooms[k].monsters[m].type == 3) {strcpy(message, "You killed the Giant!"); g->players_score += 10;}
+                        else if(g->rooms[k].monsters[m].type == 4) {strcpy(message, "You killed the Snake!"); g->players_score += 20;}
+                        else if(g->rooms[k].monsters[m].type == 5) {strcpy(message, "You killed the Undead!"); g->players_score += 20;}
+                    }
+                    shot = 1;
+                }
+            }
+            if(shot) {break;}
+            if(j == g->player_pos.y-range) {if(g->players_weapon == 2) {g->players_dagger -= 1; screen[i][j] = '~';} else if(g->players_weapon == 3) {g->players_magic_wand -= 1; screen[i][j] = ('!' | COLOR_PAIR(5));} else if(g->players_weapon == 4) {g->players_arrow -= 1; screen[i][j] = '}';}}
+        }
     }
     else {
         return;
