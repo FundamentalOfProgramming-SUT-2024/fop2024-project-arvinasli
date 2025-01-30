@@ -94,9 +94,11 @@ typedef struct {
     int players_ancient_key;
     int players_broken_key;
     int not_grab;
+    int play_music;
 } Game;
 
 void login(Player *p);
+void forgot_password(Player *p);
 void create_account(Player *p);
 void menu_handler(Player *p, Game *g);
 int game_menu(Player *p);
@@ -204,11 +206,39 @@ void login(Player *p) {
     fclose(fptr);
 
     if(user_check==1 && pass_check==0) {
-        mvprintw(LINES / 2 + 1, COLS / 2 - 15, "Your password is INCORRECT! Retry by running the game again.");
-        mvprintw(LINES / 2 + 2, COLS / 2 - 15, "Press any key to EXIT");
-        int ch = getch();
-        endwin();
-        exit(0);
+        mvprintw(LINES / 2 + 1, COLS / 2 - 15, "Your password is INCORRECT!");
+        
+        const char *options[] = {"Forgot your password?", "EXIT"};
+        int choice = 0;
+        
+        while (1) {
+            for (int i=0; i<2; i++) {
+                if (i == choice)
+                    attron(A_REVERSE);
+                mvprintw(LINES / 2 + 2 + i, COLS / 2 - 15, "%s", options[i]);
+                if (i == choice)
+                    attroff(A_REVERSE);
+            }
+
+            int ch = getch();
+            if (ch == KEY_UP && choice != 0)
+                choice--;
+            else if (ch == KEY_DOWN && choice != 1)
+                choice++;
+            else if (ch == 10)
+                break;
+        }
+
+        switch (choice) {
+            case 0:
+                forgot_password(p);
+                login(p);
+                break;
+            case 1:
+                endwin();
+                exit(0);
+                break;
+        }
     }
     else if(user_check==0 && pass_check==0) {
         mvprintw(LINES / 2 + 1, COLS / 2 - 15, "Your username and password are INCORRECT!");
@@ -219,7 +249,7 @@ void login(Player *p) {
             for (int i=0; i<3; i++) {
                 if (i == choice)
                     attron(A_REVERSE);
-                mvprintw(LINES / 2 + 2 +i, COLS / 2 - 15, "%s", options[i]);
+                mvprintw(LINES / 2 + 2 + i, COLS / 2 - 15, "%s", options[i]);
                 if (i == choice)
                     attroff(A_REVERSE);
             }
@@ -234,23 +264,27 @@ void login(Player *p) {
         }
 
         switch (choice) {
-        case 0:
-            create_account(p);
-            login(p);
-            break;
-        case 1:
-            strcpy(p->username, "Guest");
-            strcpy(p->password, "");
-            strcpy(p->email, "");
-            p->score = 0; p->gold = 0; p->count_games = 0;
-            break;
-        case 2:
-            endwin();
-            exit(0);
-            break;
+            case 0:
+                create_account(p);
+                login(p);
+                break;
+            case 1:
+                strcpy(p->username, "Guest");
+                strcpy(p->password, "");
+                strcpy(p->email, "");
+                p->score = 0; p->gold = 0; p->count_games = 0;
+                break;
+            case 2:
+                endwin();
+                exit(0);
+                break;
         }
     }
     clear();
+}
+
+void forgot_password(Player *p) {
+    return;
 }
 
 void create_account(Player *p) {
@@ -314,9 +348,25 @@ void create_account(Player *p) {
         mvprintw(LINES / 2, COLS / 2 - 15, "Choose your password: ");
         clrtobot();
         getnstr(p->password, 50);
+        if(strcmp(p->password,"generate") == 0) {
+            noecho();
+            char password[8];
+            password[0] = 65 + rand()%26;
+            for(int i=1; i<=4; i++) {
+                password[i] = 97 + rand()%26;
+            }
+            password[5] = 33 + rand()%15;
+            for(int i=6; i<8; i++) {
+                password[i] = 48 + rand()%10;
+            }
+            strcpy(p->password,password);
+            p->password[8] = 0;
+            mvprintw(LINES / 2, COLS / 2 + 7, "%s", p->password);
+            int ch = getch();
+        }
         if(!check_password(p->password)) {
             attron(COLOR_PAIR(2));
-            mvprintw(LINES / 2 - 4, COLS / 2 - 15, "Make sure to use uppercase, lowercase and digit values (at least 7 characters).");
+            mvprintw(LINES / 2 - 4, COLS / 2 - 15, "Make sure to use uppercase, lowercase and digit values (at least 7 characters). Or type generate to get a random safe password");
             attroff(COLOR_PAIR(2));
         }
         else {
@@ -525,6 +575,27 @@ void settings(Player *p, Game *g) {
             break;
     }
 
+    mvprintw(12, 1, "Do you want music to be played when you enter themed rooms?");
+    g->play_music = 1;
+    const char *options[] = {"No", "Yes"};
+    while (1) {
+        for (int i=0; i<2; i++) {
+            if (i == g->play_music)
+                attron(A_REVERSE);
+            mvprintw(13+i, 1, "%s", options[i]);
+            if (i == g->play_music)
+                attroff(A_REVERSE);
+        }
+
+        int ch = getch();
+        if (ch == KEY_UP && g->play_music == 1)
+            g->play_music = 0;
+        else if (ch == KEY_DOWN && g->play_music == 0)
+            g->play_music = 1;
+        else if (ch == 10)
+            break;
+    }
+
     clear();
 }
 
@@ -620,6 +691,7 @@ void save_game(Player *p, Game *g, chtype **screen, int **visited) {
         fprintf(saved_game, "%d\n%d\n", g->player_pos.x, g->player_pos.y);
         fprintf(saved_game, "%d\n%d\n", g->players_steps, g->k_lock);
         fprintf(saved_game, "%d\n%d\n", g->players_ancient_key, g->players_broken_key);
+        fprintf(saved_game, "%d\n", g->play_music);
 
         for(int k=0; k<6; k++) {
             fprintf(saved_game, "%d\n", g->rooms[k].type);
@@ -683,7 +755,8 @@ void saved_game_launcher(Player *p, Game *g) {
     fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->player_pos.x = str_to_num(num); fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->player_pos.y = str_to_num(num);
     fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->players_steps = str_to_num(num); fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->k_lock = str_to_num(num);
     fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->players_ancient_key = str_to_num(num); fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->players_broken_key = str_to_num(num);
-
+    fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->play_music = str_to_num(num);
+    
     for(int k=0; k<6; k++) {
         fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->rooms[k].type = str_to_num(num);
         fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->rooms[k].locked = str_to_num(num);
@@ -873,8 +946,8 @@ void saved_floor_generator(Player *p, Game *g, chtype **screen, int **visited) {
             }
         }
         if(g->players_steps - g->players_speed_step >= 15) {g->players_speed = 1; g->players_speed_step = -15;}
-        if(g->players_steps - g->players_health_step >= 20) {g->players_extra_health = 0; g->players_health_step = -20;}
-        if(g->players_steps - g->players_damage_step >= 5) {g->players_damage_rate = 1; g->players_damage_step = -5;}
+        if(g->players_steps - g->players_health_step >= 30) {g->players_extra_health = 0; g->players_health_step = -30;}
+        if(g->players_steps - g->players_damage_step >= 10) {g->players_damage_rate = 1; g->players_damage_step = -10;}
         if(g->players_health + g->players_extra_health <= 0) {
             terminate_game(0, p, g);
         }
@@ -1374,8 +1447,8 @@ void floor_generator(Player *p, Game *g) {
             }
         }
         if(g->players_steps - g->players_speed_step >= 15) {g->players_speed = 1; g->players_speed_step = -15;}
-        if(g->players_steps - g->players_health_step >= 20) {g->players_extra_health = 0; g->players_health_step = -20;}
-        if(g->players_steps - g->players_damage_step >= 5) {g->players_damage_rate = 1; g->players_damage_step = -5;}
+        if(g->players_steps - g->players_health_step >= 30) {g->players_extra_health = 0; g->players_health_step = -30;}
+        if(g->players_steps - g->players_damage_step >= 10) {g->players_damage_rate = 1; g->players_damage_step = -10;}
         if(g->players_health + g->players_extra_health <= 0) {
             terminate_game(0, p, g);
         }
@@ -1590,7 +1663,7 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
-            if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x][g->player_pos.y-g->players_speed]='^'; if(rand()%2) {return 6;} else {g->players_health -= 1; return 0;}}
+            if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x][g->player_pos.y-g->players_speed]='^'; if(rand()%3 == 0) {return 6;} else {g->players_health -= 1; return 0;}}
             if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x][g->player_pos.y-g->players_speed]='?'; return 5;}
             if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.y -= g->players_speed; return 2; }
             if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon == 5) { g->rooms[g->k_lock].locked = 0; if(rand()%10 == 1) {g->players_ancient_key -= 1; g->players_broken_key += 1;} return 0;}
@@ -1620,7 +1693,7 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
-            if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x][g->player_pos.y+g->players_speed]='^'; if(rand()%2) {return 6;} else {g->players_health -= 1; return 0;}}
+            if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x][g->player_pos.y+g->players_speed]='^'; if(rand()%3 == 0) {return 6;} else {g->players_health -= 1; return 0;}}
             if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x][g->player_pos.y+g->players_speed]='?'; return 5;}
             if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.y += g->players_speed; return 2; }
             if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon == 5) { g->rooms[g->k_lock].locked = 0; if(rand()%10 == 1) {g->players_ancient_key -= 1; g->players_broken_key += 1;} return 0;}
@@ -1650,7 +1723,7 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
-            if(check_trap(g->rooms,g->player_pos.x-g->players_speed,g->player_pos.y)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y]='^'; if(rand()%2) {return 6;} else {g->players_health -= 1; return 0;}}
+            if(check_trap(g->rooms,g->player_pos.x-g->players_speed,g->player_pos.y)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y]='^'; if(rand()%3 == 0) {return 6;} else {g->players_health -= 1; return 0;}}
             if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x-g->players_speed,g->player_pos.y)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y]='?'; return 5;}
             if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x -= g->players_speed; return 2; }
             if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon == 5) { g->rooms[g->k_lock].locked = 0; if(rand()%10 == 1) {g->players_ancient_key -= 1; g->players_broken_key += 1;} return 0;}
@@ -1679,7 +1752,7 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
-            if(check_trap(g->rooms,g->player_pos.x+g->players_speed,g->player_pos.y)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y]='^'; if(rand()%2) {return 6;} else {g->players_health -= 1; return 0;}}
+            if(check_trap(g->rooms,g->player_pos.x+g->players_speed,g->player_pos.y)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y]='^'; if(rand()%3 == 0) {return 6;} else {g->players_health -= 1; return 0;}}
             if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x+g->players_speed,g->player_pos.y)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y]='?'; return 5;}
             if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x += g->players_speed; return 2;}
             if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon == 5) { g->rooms[g->k_lock].locked = 0; if(rand()%10 == 1) {g->players_ancient_key -= 1; g->players_broken_key += 1;} return 0;}
@@ -1708,7 +1781,7 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
-            if(check_trap(g->rooms,g->player_pos.x+g->players_speed,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='^'; if(rand()%2) {return 6;} else {g->players_health -= 1; return 0;}}
+            if(check_trap(g->rooms,g->player_pos.x+g->players_speed,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='^'; if(rand()%3 == 0) {return 6;} else {g->players_health -= 1; return 0;}}
             if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x+g->players_speed,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='?'; return 5;}
             if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 2;}
             if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon == 5) { g->rooms[g->k_lock].locked = 0; if(rand()%10 == 1) {g->players_ancient_key -= 1; g->players_broken_key += 1;} return 0;}
@@ -1738,7 +1811,7 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
-            if(check_trap(g->rooms,g->player_pos.x-g->players_speed,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='^'; if(rand()%2) {return 6;} else {g->players_health -= 1; return 0;}}
+            if(check_trap(g->rooms,g->player_pos.x-g->players_speed,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='^'; if(rand()%3 == 0) {return 6;} else {g->players_health -= 1; return 0;}}
             if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x-g->players_speed,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='?'; return 5;}
             if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 2;}
             if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon == 5) { g->rooms[g->k_lock].locked = 0; if(rand()%10 == 1) {g->players_ancient_key -= 1; g->players_broken_key += 1;} return 0;}
@@ -1768,7 +1841,7 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
-            if(check_trap(g->rooms,g->player_pos.x+g->players_speed,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='^'; if(rand()%2) {return 6;} else {g->players_health -= 1; return 0;}}
+            if(check_trap(g->rooms,g->player_pos.x+g->players_speed,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='^'; if(rand()%3 == 0) {return 6;} else {g->players_health -= 1; return 0;}}
             if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x+g->players_speed,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='?'; return 5;}
             if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 2;}
             if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon == 5) { g->rooms[g->k_lock].locked = 0; if(rand()%10 == 1) {g->players_ancient_key -= 1; g->players_broken_key += 1;} return 0;}
@@ -1798,7 +1871,7 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
             if(character == '$') { g->players_gold += 25; g->players_score +=50; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
             if(character == 'f') { g->players_ordinary_food += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
-            if(check_trap(g->rooms,g->player_pos.x-g->players_speed,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='^'; if(rand()%2) {return 6;} else {g->players_health -= 1; return 0;}}
+            if(check_trap(g->rooms,g->player_pos.x-g->players_speed,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='^'; if(rand()%3 == 0) {return 6;} else {g->players_health -= 1; return 0;}}
             if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x-g->players_speed,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='?'; return 5;}
             if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 2;}
             if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon == 5) { g->rooms[g->k_lock].locked = 0; if(rand()%10 == 1) {g->players_ancient_key -= 1; g->players_broken_key += 1;} return 0;}
@@ -1883,7 +1956,13 @@ void display_health(Game *g) {
 
 void corridor_path(char direction, Pos door1, Pos door2) {
     if(direction == 'v') {
-        int num = 1 + rand()%(door2.y-door1.y-1);
+        int num;
+        if(door2.y-door1.y-1 != 0) {
+            num = 1 + rand()%(door2.y-door1.y-1);
+        }
+        else {
+            num = 1 + rand()%(door2.y-door1.y);
+        } 
         int j=1;
         for(j; j<=num; j++) {
             mvprintw(door1.y+j,door1.x,"#");
@@ -1904,7 +1983,13 @@ void corridor_path(char direction, Pos door1, Pos door2) {
         }
     }
     else if(direction == 'h') {
-        int num = 1 + rand()%(door2.x-door1.x-1);
+        int num;
+        if(door2.x-door1.x-1 != 0) {
+            num = 1 + rand()%(door2.x-door1.x-1);
+        }
+        else {
+            num = 1 + rand()%(door2.x-door1.x);
+        }
         int i=1;
         for(i; i<=num; i++) {
             mvprintw(door1.y,door1.x+i,"#");
@@ -2635,7 +2720,7 @@ void password_screen(Game *g) {
 void enchant_room(Player *p, Game *g) {
     clear();
 
-    play_music("creepypiano.mp3");
+    if(g->play_music) {play_music("creepypiano.mp3");}
 
     strcpy(message, "You've entered the ENCHANT ROOM!");
 
@@ -2782,8 +2867,8 @@ void enchant_room(Player *p, Game *g) {
         }
 
         if(g->players_steps - g->players_speed_step >= 15) {g->players_speed = 1; g->players_speed_step = -15;}
-        if(g->players_steps - g->players_health_step >= 20) {g->players_extra_health = 0; g->players_health_step = -20;}
-        if(g->players_steps - g->players_damage_step >= 5) {g->players_damage_step = -5;}
+        if(g->players_steps - g->players_health_step >= 30) {g->players_extra_health = 0; g->players_health_step = -30;}
+        if(g->players_steps - g->players_damage_step >= 10) {g->players_damage_step = -10;}
 
         if(g->players_health + g->players_extra_health <= 0) {
             terminate_game(0, p, g);
@@ -3265,14 +3350,16 @@ void battle_room(char mode[], Player *p, Game *g) {
         strcpy(message, "You're now in the battle room!");
         g->rooms[0].monsters_count = 4 + rand()%2;
         gold = 3 + rand()%4;
-        play_music("Sucker.mp3");
+        food = 3 + rand()%2;
+        if(g->play_music) {play_music("Sucker.mp3");}
     }
     else if(strcmp(mode, "treasure") == 0) {
         strcpy(message, "You're now in the treasure room!");
         g->rooms[0].type = 1;
         g->rooms[0].monsters_count = 6 + rand()%3;
         gold = 6 + rand()%5;
-        play_music("ComePlay.mp3");
+        food = 4 + rand()%3;
+        if(g->play_music) {play_music("ComePlay.mp3");}
     }
     
     for(int i=0; i<g->rooms[0].monsters_count; i++) {
@@ -3285,7 +3372,6 @@ void battle_room(char mode[], Player *p, Game *g) {
         else if(g->rooms[0].monsters[i].type == 5) {g->rooms[0].monsters[i].radius = 10; g->rooms[0].monsters[i].health = 30; g->rooms[0].monsters[i].damage = 2; g->rooms[0].monsters[i].haunt = 8;}
     }
 
-    food = 3 + rand()%2;
     potion = 3 + rand()%2;
 
     for(int j=LINES/2-5; j<=LINES/2+12; j++) {
@@ -3396,8 +3482,8 @@ void battle_room(char mode[], Player *p, Game *g) {
         }
 
         if(g->players_steps - g->players_speed_step >= 15) {g->players_speed = 1; g->players_speed_step = -15;}
-        if(g->players_steps - g->players_health_step >= 20) {g->players_extra_health = 0; g->players_health_step = -20;}
-        if(g->players_steps - g->players_damage_step >= 5) {g->players_damage_rate = 1; g->players_damage_step = -5;}
+        if(g->players_steps - g->players_health_step >= 30) {g->players_extra_health = 0; g->players_health_step = -30;}
+        if(g->players_steps - g->players_damage_step >= 10) {g->players_damage_rate = 1; g->players_damage_step = -10;}
 
         if(g->players_health + g->players_extra_health <= 0) {
             terminate_game(0, p, g);
