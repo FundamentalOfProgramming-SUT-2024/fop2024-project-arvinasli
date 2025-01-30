@@ -91,6 +91,9 @@ typedef struct {
     int players_damage_step;
     Pos weapons[3];
     int players_damage_rate;
+    int players_ancient_key;
+    int players_broken_key;
+    int not_grab;
 } Game;
 
 void login(Player *p);
@@ -210,10 +213,10 @@ void login(Player *p) {
     else if(user_check==0 && pass_check==0) {
         mvprintw(LINES / 2 + 1, COLS / 2 - 15, "Your username and password are INCORRECT!");
 
-        const char *options[] = {"Don't have an account? MAKE ONE", "EXIT"};
+        const char *options[] = {"Don't have an account? MAKE ONE", "Enter as Guest", "EXIT"};
         int choice = 0;
         while (1) {
-            for (int i=0; i<2; i++) {
+            for (int i=0; i<3; i++) {
                 if (i == choice)
                     attron(A_REVERSE);
                 mvprintw(LINES / 2 + 2 +i, COLS / 2 - 15, "%s", options[i]);
@@ -222,10 +225,10 @@ void login(Player *p) {
             }
 
             int ch = getch();
-            if (ch == KEY_UP && choice == 1)
-                choice = 0;
-            else if (ch == KEY_DOWN && choice == 0)
-                choice = 1;
+            if (ch == KEY_UP && choice != 0)
+                choice--;
+            else if (ch == KEY_DOWN && choice != 2)
+                choice++;
             else if (ch == 10)
                 break;
         }
@@ -236,6 +239,12 @@ void login(Player *p) {
             login(p);
             break;
         case 1:
+            strcpy(p->username, "Guest");
+            strcpy(p->password, "");
+            strcpy(p->email, "");
+            p->score = 0; p->gold = 0; p->count_games = 0;
+            break;
+        case 2:
             endwin();
             exit(0);
             break;
@@ -403,7 +412,7 @@ void score_board(Player *p) {
     mvprintw(1, 1, "SCORE BOARD");
     attroff(COLOR_PAIR(1));
     mvprintw(1, 20, "Press any key to RETURN");
-    mvprintw(3, 1, "RANK"); mvprintw(3, 10, "username"); mvprintw(3, 24, "score"); mvprintw(3, 35, "gold"); mvprintw(3, 44, "gamecounts"); mvprintw(3, 58, "exp");
+    mvprintw(3, 1, "RANK"); mvprintw(3, 10, "username"); mvprintw(3, 24, "score"); mvprintw(3, 35, "gold"); mvprintw(3, 44, "gamecounts");
 
     char usernames[10][50]; int scores[10]; int golds[10]; int game_counts[10]; int exps[10] = {0};
     int arr[] = {0,1,2,3,4,5,6,7,8,9};
@@ -435,26 +444,27 @@ void score_board(Player *p) {
 
     sort(ptr_arr, scores, (count%10)+1);
     attron(COLOR_PAIR(2));
-    mvprintw(4, 76, "  .__.");
-    mvprintw(5, 76, " (|  |)");
-    mvprintw(6, 76, "  (  )");
-    mvprintw(7, 76, "  _)(_");
+    mvprintw(4, 66, "  .__.");
+    mvprintw(5, 66, " (|  |)");
+    mvprintw(6, 66, "  (  )");
+    mvprintw(7, 66, "  _)(_");
     attroff(COLOR_PAIR(2));
     for(int i=0; i<=count; i++) {
         if(0<=i && i<=2) {
+            attron(A_ITALIC);
             attron(COLOR_PAIR(3));
-            mvprintw(5+i, 66, "LEGEND");
+            mvprintw(5+i, 58, "LEGEND");
             attroff(COLOR_PAIR(3));
-            attron(COLOR_PAIR(2));
+            attron(COLOR_PAIR(2)); 
         }
         else{
-            attroff(COLOR_PAIR(2));
+            attroff(COLOR_PAIR(2)); attroff(A_ITALIC);
         }
         if(strcmp(p->username,usernames[arr[i]]) == 0) {
-            mvprintw(5+i, 1, "-> %d", i+1); mvprintw(5+i, 10, "%s", usernames[arr[i]]); mvprintw(5+i, 24, "%d", scores[arr[i]]); mvprintw(5+i, 35, "%d", golds[arr[i]]); mvprintw(5+i, 44, "%d", game_counts[arr[i]]); mvprintw(5+i, 58, "%d", exps[arr[i]]);
+            mvprintw(5+i, 1, "-> %d", i+1); mvprintw(5+i, 10, "%s", usernames[arr[i]]); mvprintw(5+i, 24, "%d", scores[arr[i]]); mvprintw(5+i, 35, "%d", golds[arr[i]]); mvprintw(5+i, 44, "%d", game_counts[arr[i]]);
         }
         else {
-            mvprintw(5+i, 1, "%d", i+1); mvprintw(5+i, 10, "%s", usernames[arr[i]]); mvprintw(5+i, 24, "%d", scores[arr[i]]); mvprintw(5+i, 35, "%d", golds[arr[i]]); mvprintw(5+i, 44, "%d", game_counts[arr[i]]); mvprintw(5+i, 58, "%d", exps[arr[i]]);
+            mvprintw(5+i, 1, "%d", i+1); mvprintw(5+i, 10, "%s", usernames[arr[i]]); mvprintw(5+i, 24, "%d", scores[arr[i]]); mvprintw(5+i, 35, "%d", golds[arr[i]]); mvprintw(5+i, 44, "%d", game_counts[arr[i]]);
         }
         
     }
@@ -585,6 +595,9 @@ void game_launcher(Player *p, Game *g) {
     g->players_health_step = -20;
     g->players_damage_step = -5;
     g->players_damage_rate = 1;
+    g->players_ancient_key = 0;
+    g->players_broken_key = 0;
+    g->not_grab = 0;
 
     p->count_games++;
 
@@ -606,6 +619,7 @@ void save_game(Player *p, Game *g, chtype **screen, int **visited) {
         fprintf(saved_game, "%d\n%d\n%d\n%d\n%d\n", g->players_message_step, g->players_speed_step, g->players_health_step, g->players_damage_step, g->players_damage_rate);
         fprintf(saved_game, "%d\n%d\n", g->player_pos.x, g->player_pos.y);
         fprintf(saved_game, "%d\n%d\n", g->players_steps, g->k_lock);
+        fprintf(saved_game, "%d\n%d\n", g->players_ancient_key, g->players_broken_key);
 
         for(int k=0; k<6; k++) {
             fprintf(saved_game, "%d\n", g->rooms[k].type);
@@ -667,7 +681,9 @@ void saved_game_launcher(Player *p, Game *g) {
     fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->players_health_step = str_to_num(num); fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->players_damage_step = str_to_num(num);
     fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->players_damage_rate = str_to_num(num);
     fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->player_pos.x = str_to_num(num); fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->player_pos.y = str_to_num(num);
-    fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->players_steps = str_to_num(num); fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->k_lock= str_to_num(num);
+    fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->players_steps = str_to_num(num); fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->k_lock = str_to_num(num);
+    fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->players_ancient_key = str_to_num(num); fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->players_broken_key = str_to_num(num);
+
     for(int k=0; k<6; k++) {
         fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->rooms[k].type = str_to_num(num);
         fgets(num, 10, saved_game); num[strcspn(num,"\n")] = 0; g->rooms[k].locked = str_to_num(num);
@@ -720,6 +736,7 @@ void saved_game_launcher(Player *p, Game *g) {
 
     g->start_time = time(NULL);
     g->password_start_time = time(NULL);
+    g->not_grab = 0;
 
     saved_floor_generator(p, g, screen, visited);
     
@@ -888,6 +905,9 @@ void saved_floor_generator(Player *p, Game *g, chtype **screen, int **visited) {
         }
         else if(ch == 'p') {
             spell_screen(g);
+        }
+        else if(ch == 'g') {
+            g->not_grab = 1;
         }
 
         handle_monsters(g, screen);
@@ -1073,7 +1093,7 @@ void floor_generator(Player *p, Game *g) {
         }
     }
 
-    int k_stair_1; do { k_stair_1 = rand()%6; } while(k_stair_1 == check_room(g->rooms,g->player_pos.x,g->player_pos.y)); int k_stair_2 = rand()%6; g->k_lock = rand()%6; g->rooms[g->k_lock].locked = 1; g->rooms[g->k_lock].password = password();  int k_secret_door_1 = rand()%6; int k_secret_door_2 = rand()%6; g->secret_doors_count = 0;
+    int k_stair_1; do { k_stair_1 = rand()%6; } while(k_stair_1 == check_room(g->rooms,g->player_pos.x,g->player_pos.y)); int k_stair_2 = rand()%6; g->k_lock = rand()%6; g->rooms[g->k_lock].locked = 1; g->rooms[g->k_lock].password = password(); int k_ancient_key = rand()%6;  int k_secret_door_1 = rand()%6; int k_secret_door_2 = rand()%6; g->secret_doors_count = 0;
     int k_dagger = rand()%6; int k_magic_wand = rand()%6; int k_arrow = rand()%6; int k_sword = rand()%6;
     for(int k=0; k<6; k++) {
         if(g->rooms[k].type == 1) {
@@ -1088,7 +1108,7 @@ void floor_generator(Player *p, Game *g) {
             }
         }
         int d1=1; int d2=1; int stairs = 0; int trap = 0; int gold = 0; int dark_gold = 0; int ordinary_food = 0; int secret_door = 0; int potion = 0;
-        int dagger = 0; int magic_wand = 0; int arrow = 0; int sword = 0; int monster = 0;
+        int dagger = 0; int magic_wand = 0; int arrow = 0; int sword = 0; int monster = 0; int ancient_key = 0; 
         for(int j=1; j<LINES; j++) {
             for(int i=0; i<COLS; i++) {
                 if(k == 0) {
@@ -1230,6 +1250,12 @@ void floor_generator(Player *p, Game *g) {
                                 attron(COLOR_PAIR(8)); mvprintw(j,i-1,"-"); mvprintw(j,i,")"); mvprintw(j,i+1,"="); mvprintw(j,i+2,"="); mvprintw(j,i+3,">"); attroff(COLOR_PAIR(8));
                                 sword++;
                             }
+                        }
+                    }
+                    if(k == k_ancient_key) {
+                        if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && (mvinch(j,i) & A_CHARTEXT) == '.' && !check_trap(g->rooms,i,j) && !check_secret_door(g->secret_doors_count,g->secret_doors,i,j) && ancient_key<1) {
+                            attron(COLOR_PAIR(4)); mvprintw(j,i,"]"); attroff(COLOR_PAIR(4));
+                            ancient_key++;
                         }
                     }
                     if(k == k_dagger) {
@@ -1380,6 +1406,9 @@ void floor_generator(Player *p, Game *g) {
         }
         else if(ch == 'p') {
             spell_screen(g);
+        }
+        else if(ch == 'g') {
+            g->not_grab = 1;
         }
 
         handle_monsters(g, screen);
@@ -1564,16 +1593,24 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x][g->player_pos.y-g->players_speed]='^'; if(rand()%2) {return 6;} else {g->players_health -= 1; return 0;}}
             if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x][g->player_pos.y-g->players_speed]='?'; return 5;}
             if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.y -= g->players_speed; return 2; }
-            if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
+            if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon == 5) { g->rooms[g->k_lock].locked = 0; if(rand()%10 == 1) {g->players_ancient_key -= 1; g->players_broken_key += 1;} return 0;}
+            else if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon != 5) { return 3; }
             else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.y -= g->players_speed; return 0; }
-            if (character == '.' || character == '+' || character == '#') { g->player_pos.y -= g->players_speed; }
-            if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y-g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y-g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y-g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x+i][g->player_pos.y-g->players_speed]='.';} g->player_pos.y -= g->players_speed; return 0; }
+            if(!g->not_grab) {
+                if (character == '.' || character == '+' || character == '#') { g->player_pos.y -= g->players_speed; }
+                if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+                if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+                if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+                if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y-g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+                if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y-g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+                if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y-g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+                if(character == ']') { g->players_ancient_key += 1; screen[g->player_pos.x][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; return 0; }
+                if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x+i][g->player_pos.y-g->players_speed]='.';} g->player_pos.y -= g->players_speed; return 0; }
+            }
+            else {
+                g->player_pos.y -= g->players_speed;
+                g->not_grab = 0;
+            }
             break;
         case '2':
             character = mvinch(g->player_pos.y+g->players_speed, g->player_pos.x) & A_CHARTEXT;
@@ -1586,16 +1623,24 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(check_trap(g->rooms,g->player_pos.x,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x][g->player_pos.y+g->players_speed]='^'; if(rand()%2) {return 6;} else {g->players_health -= 1; return 0;}}
             if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x][g->player_pos.y+g->players_speed]='?'; return 5;}
             if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.y += g->players_speed; return 2; }
-            if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
+            if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon == 5) { g->rooms[g->k_lock].locked = 0; if(rand()%10 == 1) {g->players_ancient_key -= 1; g->players_broken_key += 1;} return 0;}
+            else if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon != 5) { return 3; }
             else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.y += g->players_speed; return 0; }
-            if (character == '.' || character == '+' || character == '#') { g->player_pos.y += g->players_speed; }
-            if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
-            if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
-            if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
-            if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y+g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
-            if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y+g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
-            if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y+g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
-            if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x+i][g->player_pos.y+g->players_speed]='.';} g->player_pos.y += g->players_speed; return 0; }
+            if(!g->not_grab) {
+                if (character == '.' || character == '+' || character == '#') { g->player_pos.y += g->players_speed; }
+                if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+                if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+                if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+                if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y+g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+                if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y+g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+                if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x,g->player_pos.y+g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+                if(character == ']') { g->players_ancient_key += 1; screen[g->player_pos.x][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; return 0; }
+                if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x+i][g->player_pos.y+g->players_speed]='.';} g->player_pos.y += g->players_speed; return 0; }
+            }
+            else {
+                g->player_pos.y += g->players_speed;
+                g->not_grab = 0;
+            }
             break;
         case '4':
             character = mvinch(g->player_pos.y, g->player_pos.x-g->players_speed) & A_CHARTEXT;
@@ -1608,15 +1653,23 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(check_trap(g->rooms,g->player_pos.x-g->players_speed,g->player_pos.y)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y]='^'; if(rand()%2) {return 6;} else {g->players_health -= 1; return 0;}}
             if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x-g->players_speed,g->player_pos.y)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y]='?'; return 5;}
             if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x -= g->players_speed; return 2; }
-            if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
+            if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon == 5) { g->rooms[g->k_lock].locked = 0; if(rand()%10 == 1) {g->players_ancient_key -= 1; g->players_broken_key += 1;} return 0;}
+            else if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon != 5) { return 3; }
             else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x -= g->players_speed; return 0; }
-            if (character == '.' || character == '+' || character == '#') { g->player_pos.x -= g->players_speed; }
-            if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
-            if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
-            if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
-            if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
-            if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
-            if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+            if(!g->not_grab) {
+                if (character == '.' || character == '+' || character == '#') { g->player_pos.x -= g->players_speed; }
+                if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+                if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+                if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+                if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+                if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+                if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+                if(character == ']') { g->players_ancient_key += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y]='.'; g->player_pos.x -= g->players_speed; return 0; }
+            }
+            else {
+                g->player_pos.x -= g->players_speed;
+                g->not_grab = 0;
+            }
             break;
         case '6':
             character = mvinch(g->player_pos.y, g->player_pos.x+g->players_speed) & A_CHARTEXT;
@@ -1629,15 +1682,23 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(check_trap(g->rooms,g->player_pos.x+g->players_speed,g->player_pos.y)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y]='^'; if(rand()%2) {return 6;} else {g->players_health -= 1; return 0;}}
             if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x+g->players_speed,g->player_pos.y)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y]='?'; return 5;}
             if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x += g->players_speed; return 2;}
-            if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
+            if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon == 5) { g->rooms[g->k_lock].locked = 0; if(rand()%10 == 1) {g->players_ancient_key -= 1; g->players_broken_key += 1;} return 0;}
+            else if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon != 5) { return 3; }
             else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x += g->players_speed; return 0;}
-            if (character == '.' || character == '+' || character == '#') { g->player_pos.x += g->players_speed; }
-            if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
-            if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
-            if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
-            if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
-            if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
-            if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+            if(!g->not_grab) {
+                if (character == '.' || character == '+' || character == '#') { g->player_pos.x += g->players_speed; }
+                if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+                if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+                if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+                if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+                if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+                if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+                if(character == ']') { g->players_ancient_key += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y]='.'; g->player_pos.x += g->players_speed; return 0; }
+            }
+            else {
+                g->player_pos.x += g->players_speed;
+                g->not_grab = 0;
+            }
             break;
         case '9':
             character = mvinch(g->player_pos.y-g->players_speed, g->player_pos.x+g->players_speed) & A_CHARTEXT;
@@ -1650,16 +1711,24 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(check_trap(g->rooms,g->player_pos.x+g->players_speed,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='^'; if(rand()%2) {return 6;} else {g->players_health -= 1; return 0;}}
             if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x+g->players_speed,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='?'; return 5;}
             if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 2;}
-            if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
+            if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon == 5) { g->rooms[g->k_lock].locked = 0; if(rand()%10 == 1) {g->players_ancient_key -= 1; g->players_broken_key += 1;} return 0;}
+            else if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon != 5) { return 3; }
             else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0;}
-            if (character == '.' || character == '+' || character == '#') { g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; }
-            if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
-            if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
-            if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
-            if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y-g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y-g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y-g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x+g->players_speed+i][g->player_pos.y-g->players_speed]='.';} g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+            if(!g->not_grab) {
+                if (character == '.' || character == '+' || character == '#') { g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; }
+                if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+                if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+                if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+                if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y-g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+                if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y-g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+                if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y-g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+                if(character == ']') { g->players_ancient_key += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+                if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x+g->players_speed+i][g->player_pos.y-g->players_speed]='.';} g->player_pos.x += g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+            }
+            else {
+                g->player_pos.y -= g->players_speed; g->player_pos.x += g->players_speed;
+                g->not_grab = 0;
+            }
             break;
         case '7':
             character = mvinch(g->player_pos.y-g->players_speed, g->player_pos.x-g->players_speed) & A_CHARTEXT;
@@ -1672,16 +1741,24 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(check_trap(g->rooms,g->player_pos.x-g->players_speed,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='^'; if(rand()%2) {return 6;} else {g->players_health -= 1; return 0;}}
             if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x-g->players_speed,g->player_pos.y-g->players_speed)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='?'; return 5;}
             if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 2;}
-            if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
+            if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon == 5) { g->rooms[g->k_lock].locked = 0; if(rand()%10 == 1) {g->players_ancient_key -= 1; g->players_broken_key += 1;} return 0;}
+            else if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon != 5) { return 3; }
             else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0;}
-            if (character == '.' || character == '+' || character == '#') { g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; }
-            if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
-            if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
-            if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
-            if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y-g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y-g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y-g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
-            if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x-g->players_speed+i][g->player_pos.y-g->players_speed]='.';} g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+            if(!g->not_grab) {
+                if (character == '.' || character == '+' || character == '#') { g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; }
+                if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+                if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+                if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+                if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y-g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+                if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y-g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+                if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y-g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+                if(character == ']') { g->players_ancient_key += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y-g->players_speed]='.'; g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+                if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x-g->players_speed+i][g->player_pos.y-g->players_speed]='.';} g->player_pos.x -= g->players_speed; g->player_pos.y -= g->players_speed; return 0; }
+            }
+            else {
+                g->player_pos.y -= g->players_speed; g->player_pos.x -= g->players_speed;
+                g->not_grab = 0;
+            }
             break;
         case '3':
             character = mvinch(g->player_pos.y+g->players_speed, g->player_pos.x+g->players_speed) & A_CHARTEXT;
@@ -1694,16 +1771,24 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(check_trap(g->rooms,g->player_pos.x+g->players_speed,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='^'; if(rand()%2) {return 6;} else {g->players_health -= 1; return 0;}}
             if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x+g->players_speed,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='?'; return 5;}
             if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 2;}
-            if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
+            if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon == 5) { g->rooms[g->k_lock].locked = 0; if(rand()%10 == 1) {g->players_ancient_key -= 1; g->players_broken_key += 1;} return 0;}
+            else if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon != 5) { return 3; }
             else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0;}
-            if (character == '.' || character == '+' || character == '#') { g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; }
-            if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
-            if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
-            if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
-            if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y+g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
-            if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y+g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
-            if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y+g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
-            if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x+g->players_speed+i][g->player_pos.y+g->players_speed]='.';} g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            if(!g->not_grab) {
+                if (character == '.' || character == '+' || character == '#') { g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; }
+                if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+                if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+                if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+                if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y+g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+                if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y+g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+                if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x+g->players_speed,g->player_pos.y+g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+                if(character == ']') { g->players_ancient_key += 1; screen[g->player_pos.x+g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed; return 0; }
+                if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x+g->players_speed+i][g->player_pos.y+g->players_speed]='.';} g->player_pos.x += g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            }
+            else {
+                g->player_pos.y += g->players_speed; g->player_pos.x += g->players_speed;
+                g->not_grab = 0;
+            }
             break;
         case '1':
             character = mvinch(g->player_pos.y+g->players_speed, g->player_pos.x-g->players_speed) & A_CHARTEXT;
@@ -1716,16 +1801,24 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             if(check_trap(g->rooms,g->player_pos.x-g->players_speed,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='^'; if(rand()%2) {return 6;} else {g->players_health -= 1; return 0;}}
             if(check_secret_door(g->secret_doors_count,g->secret_doors,g->player_pos.x-g->players_speed,g->player_pos.y+g->players_speed)) { screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='?'; return 5;}
             if(character == '&' && g->rooms[g->k_lock].locked == 1) { g->password_start_time = time(NULL); g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 2;}
-            if(character == '@' && g->rooms[g->k_lock].locked == 1) { return 3; }
-            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0;}
-            if (character == '.' || character == '+' || character == '#') { g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; }
-            if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
-            if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
-            if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
-            if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y+g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
-            if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y+g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
-            if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y+g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
-            if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x-g->players_speed+i][g->player_pos.y+g->players_speed]='.';} g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon == 5) { g->rooms[g->k_lock].locked = 0; if(rand()%10 == 1) {g->players_ancient_key -= 1; g->players_broken_key += 1;} return 0;}
+            else if(character == '@' && g->rooms[g->k_lock].locked == 1 && g->players_weapon != 5) { return 3; }
+            else if(character == '@' && g->rooms[g->k_lock].locked == 0) { g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            if(!g->not_grab) {
+                if (character == '.' || character == '+' || character == '#') { g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; }
+                if(character == '"') { g->players_health_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+                if(character == '*') { g->players_speed_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+                if(character == '\'') { g->players_damage_potion += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+                if(character == '~') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y+g->players_speed)) {g->players_dagger += 10;} else {g->players_dagger += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+                if(character == '!') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y+g->players_speed)) {g->players_magic_wand += 8;} else {g->players_magic_wand += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+                if(character == '}') { if(check_weapons(g->weapons,g->player_pos.x-g->players_speed,g->player_pos.y+g->players_speed)) {g->players_arrow += 20;} else {g->players_arrow += 1;} screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+                if(character == ']') { g->players_ancient_key += 1; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
+                if(character == ')') { g->players_sword += 1; for(int i=-g->players_speed; i<=3; i++) {screen[g->player_pos.x-g->players_speed+i][g->player_pos.y+g->players_speed]='.';} g->player_pos.x -= g->players_speed; g->player_pos.y += g->players_speed; return 0; }
+            }
+            else {
+                g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed;
+                g->not_grab = 0;
+            }
             break;
         case 'f':
             ch = getch();
@@ -1889,7 +1982,7 @@ void display_screen(Game *g, char mode[], int **visited, chtype **screen) {
                         attroff(COLOR_PAIR(2));
                         continue;
                     }
-                    else if(screen[i][j] == 'o') {
+                    else if(screen[i][j] == 'o' || screen[i][j] == ']') {
                         attron(COLOR_PAIR(4));
                         mvprintw(j,i,"%c",screen[i][j]);
                         attroff(COLOR_PAIR(4));
@@ -2262,7 +2355,7 @@ void weapon_screen(Game *g) {
     mvprintw(14, 20, "You can see weapons of the game here with their amount and description");
     
     char message[100] = " ";
-    const char *weapons[] = {"Mace (z)", "-)==> Sword (x)", "~ Dagger (c)",  "! Magic Wand (v)", "} Normal Arrow (b)", message};
+    const char *weapons[] = {"Mace (z)", "-)==> Sword (x)", "~ Dagger (c)",  "! Magic Wand (v)", "} Normal Arrow (b)", "] Ancient Key (])", "Broken Key", message};
     
 
     int choose = g->players_weapon;
@@ -2272,8 +2365,12 @@ void weapon_screen(Game *g) {
     mvprintw(20, 1, "Ranged Weapons:");
     attroff(COLOR_PAIR(1));
 
+    attron(COLOR_PAIR(4));
+    mvprintw(16, 64, "Ancient Key:");
+    attroff(COLOR_PAIR(4));
+
     while (1) {
-        for (int i=0; i<6; i++) {
+        for (int i=0; i<8; i++) {
             if (i == choose)
                 attron(A_REVERSE);
             if(i == 0) {
@@ -2296,7 +2393,15 @@ void weapon_screen(Game *g) {
                 mvprintw(19+i, 1, "%s [count: %d damage: 5 range: 5]  ", weapons[i], g->players_arrow);
             }
             else if(i == 5) {
-                mvprintw(20+i, 1, "%s  ", weapons[i]);
+                attron(COLOR_PAIR(4));
+                mvprintw(12+i, 64, "%s [count: %d]  ", weapons[i], g->players_ancient_key);
+                attroff(COLOR_PAIR(4));
+            }
+            else if(i == 6) {
+                mvprintw(12+i, 64, "%s [count: %d]  ", weapons[i], g->players_broken_key);
+            }
+            else if(i == 7) {
+                mvprintw(18+i, 1, "%s  ", weapons[i]);
             }
             if (i == choose)
                 attroff(A_REVERSE);
@@ -2370,6 +2475,23 @@ void weapon_screen(Game *g) {
             }
             else {
                 strcpy(message, "You have to put your last weapon in the backpack first");
+            }
+        }
+        else if (ch == ']') {
+            if(g->players_broken_key >= 2) {
+                g->players_ancient_key += 1;
+                g->players_broken_key -= 2;
+            }
+            if(g->players_ancient_key > 0 && (g->players_weapon == -1 || g->players_weapon == 5)) {
+                g->players_weapon = 5;
+                choose = 5;
+                break;
+            }
+            else if(g->players_ancient_key == 0) {
+                strcpy(message, "You have no ancient key                                     ");
+            }
+            else {
+                strcpy(message, "You have to put your other weapon in the backpack first");
             }
         }
         else {
@@ -2841,6 +2963,29 @@ int is_next(Pos a, Pos b) {
 }
 
 void handle_weapons(Game *g, char ch, chtype **screen) {
+    switch(g->players_weapon) {
+        case 2:
+            if(g->players_dagger == 0) {
+                g->players_weapon = -1;
+            }
+            break;
+        case 3:
+            if(g->players_magic_wand == 0) {
+                g->players_weapon = -1;
+            }
+            break;
+        case 4:
+            if(g->players_arrow == 0) {
+                g->players_weapon = -1;
+            }
+            break;
+        case 5:
+            if(g->players_ancient_key == 0) {
+                g->players_weapon = -1;
+            }
+            break;
+    }
+
     if (ch == 'w') {
         g->players_weapon = -1;
     }
@@ -2902,6 +3047,18 @@ void handle_weapons(Game *g, char ch, chtype **screen) {
         }
         else {
             strcpy(message, "put in the backpack first");
+        }
+    }
+    else if (ch == ']') {
+        if(g->players_ancient_key > 0 && (g->players_weapon == -1 || g->players_weapon == 5)) {
+            g->players_weapon = 5;
+            strcpy(message, "You can now open any locked doors!");
+        }
+        else if(g->players_ancient_key == 0) {
+            strcpy(message, "You have no ancient key");
+        }
+        else {
+            strcpy(message, "put your other weapon in the backpack first");
         }
     }
     if (ch == ' ') {
