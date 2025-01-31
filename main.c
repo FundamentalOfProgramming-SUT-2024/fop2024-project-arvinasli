@@ -31,6 +31,7 @@ typedef struct {
     int health;
     int damage;
     int haunt;
+    int freeze;
 } Monster;
 
 typedef struct {
@@ -155,7 +156,7 @@ int main() {
     login(p);
 
     Game *g = (Game *) malloc(sizeof(Game));
-    g->difficulty = 0; g->player_color = 0;
+    g->difficulty = 0; g->player_color = 0; g->play_music = 1;
     menu_handler(p,g);
     
     endwin();
@@ -284,7 +285,52 @@ void login(Player *p) {
 }
 
 void forgot_password(Player *p) {
-    return;
+    clear();
+    init_pair(1, 8, COLOR_BLACK);
+    init_pair(2, COLOR_RED, COLOR_BLACK);
+
+    while(1) {
+        attron(COLOR_PAIR(1)); attron(A_REVERSE);
+        mvprintw(1, 1, "FORGOT YOUR PASSWORD");
+        attroff(COLOR_PAIR(1)); attroff(A_REVERSE);
+        mvprintw(2, 1, "Enter your email to retrieve your password");
+        
+        curs_set(TRUE);
+        echo();
+        char email[50]; char password[50];
+        mvprintw(4, 1, "Enter your email: ");
+        clrtoeol(); refresh();
+        getnstr(email, 50);
+        curs_set(FALSE);
+        noecho();
+        FILE *fptr;
+        fptr = fopen("accounts.txt", "r");
+        char line[50]; char last_line[50]; int found = 0;
+        while (fgets(line, 50, fptr) != NULL) {
+            line[strcspn(line, "\n")] = '\0';
+            if (check_email(line) && strcmp(email, line) == 0) {
+                strcpy(password, last_line);
+                found = 1;
+                break;
+            }
+            strcpy(last_line, line);
+        }
+        fclose(fptr);
+
+        mvprintw(5, 1, "password: ");
+        if(found) {
+            mvprintw(5, 11, "%s                                     ", password);
+            char ch = getch();
+            break;
+        }
+        else {
+            attron(COLOR_PAIR(2));
+            mvprintw(5, 11, "The email you entered is not valid.");
+            attroff(COLOR_PAIR(2));
+        }
+    }
+
+    clear();
 }
 
 void create_account(Player *p) {
@@ -458,25 +504,20 @@ void score_board(Player *p) {
     init_pair(2, COLOR_YELLOW, COLOR_BLACK);
     init_pair(3, COLOR_MAGENTA, COLOR_BLACK);
 
-    attron(COLOR_PAIR(1));
-    mvprintw(1, 1, "SCORE BOARD");
-    attroff(COLOR_PAIR(1));
-    mvprintw(1, 20, "Press any key to RETURN");
-    mvprintw(3, 1, "RANK"); mvprintw(3, 10, "username"); mvprintw(3, 24, "score"); mvprintw(3, 35, "gold"); mvprintw(3, 44, "gamecounts");
-
-    char usernames[10][50]; int scores[10]; int golds[10]; int game_counts[10]; int exps[10] = {0};
-    int arr[] = {0,1,2,3,4,5,6,7,8,9};
+    char usernames[50][50]; int scores[50]; int golds[50]; int game_counts[50];
+    int arr[50];
+    for(int i=0; i<50; i++) {
+        arr[i] = i;
+    }
     int *ptr_arr = arr;
 
     FILE *fptr;
     fptr = fopen("accounts.txt","r");
-    char line[50]; int i = 0; int count = 0;
+    char line[50]; int i = 0; int count = -1;
     while(fgets(line, 50, fptr) != NULL) {
         line[strcspn(line,"\n")] = '\0';
         if(i%6 == 0) {
-            if(i != 0) {
-                count++;
-            }
+            count++;
             strcpy(usernames[count],line);
         }
         else if(i%6 == 3) {
@@ -492,34 +533,56 @@ void score_board(Player *p) {
     }
     fclose(fptr);
 
-    sort(ptr_arr, scores, (count%10)+1);
-    attron(COLOR_PAIR(2));
-    mvprintw(4, 66, "  .__.");
-    mvprintw(5, 66, " (|  |)");
-    mvprintw(6, 66, "  (  )");
-    mvprintw(7, 66, "  _)(_");
-    attroff(COLOR_PAIR(2));
-    for(int i=0; i<=count; i++) {
-        if(0<=i && i<=2) {
-            attron(A_ITALIC);
-            attron(COLOR_PAIR(3));
-            mvprintw(5+i, 58, "LEGEND");
-            attroff(COLOR_PAIR(3));
-            attron(COLOR_PAIR(2)); 
+    sort(ptr_arr, scores, count+1);
+    
+    int page = 0;
+    while(1) {
+        attron(COLOR_PAIR(1));
+        mvprintw(1, 1, "SCORE BOARD");
+        attroff(COLOR_PAIR(1));
+        mvprintw(1, 20, "Press left or right keys to move between pages");
+        mvprintw(3, 1, "RANK"); mvprintw(3, 10, "username"); mvprintw(3, 24, "score"); mvprintw(3, 35, "gold"); mvprintw(3, 44, "gamecounts");
+        clrtobot();
+        for(int i=0; i<10 && i+page*10<=count; i++) {
+            if(page == 0) {
+                attron(COLOR_PAIR(2));
+                mvprintw(4, 66, "  .__.");
+                mvprintw(5, 66, " (|  |)");
+                mvprintw(6, 66, "  (  )");
+                mvprintw(7, 66, "  _)(_");
+                attroff(COLOR_PAIR(2));
+                if(0<=i && i<=2) {
+                    attron(A_ITALIC);
+                    attron(COLOR_PAIR(3));
+                    mvprintw(5+i, 58, "LEGEND");
+                    attroff(COLOR_PAIR(3));
+                    attron(COLOR_PAIR(2)); 
+                }
+                else{
+                    attroff(COLOR_PAIR(2)); attroff(A_ITALIC);
+                }
+            }
+            if(strcmp(p->username,usernames[arr[i+page*10]]) == 0) {
+                mvprintw(5+i, 1, "-> %d", i+1+page*10); mvprintw(5+i, 10, "%s", usernames[arr[i+page*10]]); mvprintw(5+i, 24, "%d", scores[arr[i+page*10]]); mvprintw(5+i, 35, "%d", golds[arr[i+page*10]]); mvprintw(5+i, 44, "%d", game_counts[arr[i+page*10]]);
+            }
+            else {
+                mvprintw(5+i, 1, "%d", i+1+page*10); mvprintw(5+i, 10, "%s", usernames[arr[i+page*10]]); mvprintw(5+i, 24, "%d", scores[arr[i+page*10]]); mvprintw(5+i, 35, "%d", golds[arr[i+page*10]]); mvprintw(5+i, 44, "%d", game_counts[arr[i+page*10]]);
+            }
         }
-        else{
-            attroff(COLOR_PAIR(2)); attroff(A_ITALIC);
+
+        attron(A_ITALIC); mvprintw(16, 30, "Page: %d", page+1); attroff(A_ITALIC);
+
+        int ch = getch();
+        if(ch == KEY_RIGHT && page != 4) {
+            page += 1;
         }
-        if(strcmp(p->username,usernames[arr[i]]) == 0) {
-            mvprintw(5+i, 1, "-> %d", i+1); mvprintw(5+i, 10, "%s", usernames[arr[i]]); mvprintw(5+i, 24, "%d", scores[arr[i]]); mvprintw(5+i, 35, "%d", golds[arr[i]]); mvprintw(5+i, 44, "%d", game_counts[arr[i]]);
+        else if(ch == KEY_LEFT && page != 0) {
+            page -= 1;
         }
         else {
-            mvprintw(5+i, 1, "%d", i+1); mvprintw(5+i, 10, "%s", usernames[arr[i]]); mvprintw(5+i, 24, "%d", scores[arr[i]]); mvprintw(5+i, 35, "%d", golds[arr[i]]); mvprintw(5+i, 44, "%d", game_counts[arr[i]]);
+            break;
         }
-        
     }
-
-    char ch = getch();
 
     clear();
 }
@@ -823,32 +886,42 @@ void saved_floor_generator(Player *p, Game *g, chtype **screen, int **visited) {
     if(g->floor_number == 1) {
         strcpy(message, "You're now in the first floor!");
         for(int k=0; k<5; k++) {
-            g->rooms[k].monsters_count = rand() % 2;
-            for(int i=0; i<g->rooms[k].monsters_count; i++) {
-                g->rooms[k].monsters[i].type = 1+rand()%2; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].room = k;
-                if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 1; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 0;}
-                else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 3;}
+            if(g->rooms[k].type == 2) {
+                g->rooms[k].monsters_count = 0;
+            }
+            else {
+                g->rooms[k].monsters_count = rand() % 2;
+                for(int i=0; i<g->rooms[k].monsters_count; i++) {
+                    g->rooms[k].monsters[i].type = 1+rand()%2; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].freeze = 0; g->rooms[k].monsters[i].room = k;
+                    if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 1; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 0;}
+                    else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 3;}
+                }
             }
         }
     }
     else if(g->floor_number == 2) {
         strcpy(message, "You entered a new floor!");
         for(int k=0; k<6; k++) {
-            g->rooms[k].monsters_count = 1;
-            for(int i=0; i<g->rooms[k].monsters_count; i++) {
-                g->rooms[k].monsters[i].type = 1+rand()%3; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].room = k;
-                if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 1; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 0;}
-                else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 3;}
-                else if(g->rooms[k].monsters[i].type == 3) {g->rooms[k].monsters[i].radius = 4; g->rooms[k].monsters[i].health = 15; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 5;}
+            if(g->rooms[k].type == 2) {
+                g->rooms[k].monsters_count = 0;
             }
-        }
+            else {
+                g->rooms[k].monsters_count = 1;
+                for(int i=0; i<g->rooms[k].monsters_count; i++) {
+                    g->rooms[k].monsters[i].type = 1+rand()%3; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].freeze = 0; g->rooms[k].monsters[i].room = k;
+                    if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 1; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 0;}
+                    else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 3;}
+                    else if(g->rooms[k].monsters[i].type == 3) {g->rooms[k].monsters[i].radius = 4; g->rooms[k].monsters[i].health = 15; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 5;}
+                }
+            } 
+        }     
     }
     else if(g->floor_number == 3) {
         strcpy(message, "You entered a new floor!");
         for(int k=0; k<6; k++) {
             g->rooms[k].monsters_count = 1+rand()%2;
             for(int i=0; i<g->rooms[k].monsters_count; i++) {
-                g->rooms[k].monsters[i].type = 1+rand()%4; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].room = k;
+                g->rooms[k].monsters[i].type = 1+rand()%4; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].freeze = 0; g->rooms[k].monsters[i].room = k;
                 if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 1; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 0;}
                 else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 3;}
                 else if(g->rooms[k].monsters[i].type == 3) {g->rooms[k].monsters[i].radius = 4; g->rooms[k].monsters[i].health = 15; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 5;}
@@ -865,7 +938,7 @@ void saved_floor_generator(Player *p, Game *g, chtype **screen, int **visited) {
             else {
                 g->rooms[k].monsters_count = 1+rand()%2;
                 for(int i=0; i<g->rooms[k].monsters_count; i++) {
-                    g->rooms[k].monsters[i].type = 1+rand()%5; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].room = k;
+                    g->rooms[k].monsters[i].type = 1+rand()%5; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].freeze = 0; g->rooms[k].monsters[i].room = k;
                     if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 1; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 0;}
                     else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 3;}
                     else if(g->rooms[k].monsters[i].type == 3) {g->rooms[k].monsters[i].radius = 4; g->rooms[k].monsters[i].health = 15; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 5;}
@@ -879,6 +952,9 @@ void saved_floor_generator(Player *p, Game *g, chtype **screen, int **visited) {
     for(int k=0; k<6; k++) {
         if(g->rooms[k].type == 1) {
             g->rooms[k].traps_count = 7+rand()%5;
+        }
+        else if(g->rooms[k].type == 2) {
+            g->rooms[k].traps_count = 0;
         }
         else {
             g->rooms[k].traps_count = 1+rand()%3;
@@ -906,7 +982,7 @@ void saved_floor_generator(Player *p, Game *g, chtype **screen, int **visited) {
                     }
                     
                     if(g->floor_number != 4) {
-                        if(k == k_secret_door_1 || k == k_secret_door_2) {
+                        if((k == k_secret_door_1 || k == k_secret_door_2) && g->rooms[k].type != 2) {
                             if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && secret_door<1) {
                                 g->secret_doors[g->secret_doors_count].x = i; g->secret_doors[g->secret_doors_count].y = j;
                                 secret_door++;
@@ -983,6 +1059,31 @@ void saved_floor_generator(Player *p, Game *g, chtype **screen, int **visited) {
             g->not_grab = 1;
         }
 
+        if(g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].type == 2) {
+            short red, green, blue;
+            color_content(COLOR_WHITE, &red, &green, &blue);
+            init_color(COLOR_WHITE, 0, 128 * 1000 / 255, 128 * 1000 / 255); // Teal
+            play_music("TheDeathWaltz.mp3");
+            strcpy(message, "You're now in the nightmare room!");
+            while(g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].type == 2) {
+                clear();
+                display_message(g, g->floor_number, g->players_score, g->players_gold);
+                display_health(g);
+
+                display_screen(g,"nightmare",visited,screen);
+
+                attron(COLOR_PAIR(g->player_color));
+                mvprintw(g->player_pos.y, g->player_pos.x, "@");
+                attroff(COLOR_PAIR(g->player_color));
+
+                int ch = getch();
+                handle_movement(screen, visited, ch, g);
+            }
+            init_color(COLOR_WHITE, red, green, blue);
+            stop_music();
+            clear();
+        }
+
         handle_monsters(g, screen);
         handle_movement_monsters(g, screen);
 
@@ -1055,10 +1156,19 @@ void floor_generator(Player *p, Game *g) {
     if(g->floor_number == 1) {
         strcpy(message, "You're now in the first floor!");
         map_builder(g,6);
+
+        if(rand()%2) {
+            int k_nightmare;
+            do {
+                k_nightmare = rand()%6;
+            } while(k_nightmare == check_room(g->rooms, g->player_pos.x, g->player_pos.y));
+            g->rooms[k_nightmare].type = 2;
+        }
         for(int k=0; k<5; k++) {
-            g->rooms[k].monsters_count = rand() % 2;
+            if(g->rooms[k].type == 2) {g->rooms[k].monsters_count = 0;}
+            else {g->rooms[k].monsters_count = rand() % 2;}
             for(int i=0; i<g->rooms[k].monsters_count; i++) {
-                g->rooms[k].monsters[i].type = 1+rand()%2; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].room = k;
+                g->rooms[k].monsters[i].type = 1+rand()%2; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].freeze = 0; g->rooms[k].monsters[i].room = k;
                 if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 1; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 0;}
                 else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 3;}
             }
@@ -1067,10 +1177,18 @@ void floor_generator(Player *p, Game *g) {
     else if(g->floor_number == 2) {
         strcpy(message, "You entered a new floor!");
         map_builder(g,check_room(g->rooms,g->player_pos.x,g->player_pos.y));
+
+        int k_nightmare;
+        do {
+            k_nightmare = rand()%6;
+        } while(k_nightmare == check_room(g->rooms, g->player_pos.x, g->player_pos.y));
+        g->rooms[k_nightmare].type = 2;
+
         for(int k=0; k<6; k++) {
-            g->rooms[k].monsters_count = 1;
+            if(g->rooms[k].type == 2) {g->rooms[k].monsters_count = 0;}
+            else {g->rooms[k].monsters_count = 1;}
             for(int i=0; i<g->rooms[k].monsters_count; i++) {
-                g->rooms[k].monsters[i].type = 1+rand()%3; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].room = k;
+                g->rooms[k].monsters[i].type = 1+rand()%3; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].freeze = 0; g->rooms[k].monsters[i].room = k;
                 if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 1; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 0;}
                 else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 3;}
                 else if(g->rooms[k].monsters[i].type == 3) {g->rooms[k].monsters[i].radius = 4; g->rooms[k].monsters[i].health = 15; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 5;}
@@ -1083,7 +1201,7 @@ void floor_generator(Player *p, Game *g) {
         for(int k=0; k<6; k++) {
             g->rooms[k].monsters_count = 1+rand()%2;
             for(int i=0; i<g->rooms[k].monsters_count; i++) {
-                g->rooms[k].monsters[i].type = 1+rand()%4; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].room = k;
+                g->rooms[k].monsters[i].type = 1+rand()%4; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].freeze = 0; g->rooms[k].monsters[i].room = k;
                 if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 1; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 0;}
                 else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 3;}
                 else if(g->rooms[k].monsters[i].type == 3) {g->rooms[k].monsters[i].radius = 4; g->rooms[k].monsters[i].health = 15; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 5;}
@@ -1113,7 +1231,7 @@ void floor_generator(Player *p, Game *g) {
             else {
                 g->rooms[k].monsters_count = 1+rand()%2;
                 for(int i=0; i<g->rooms[k].monsters_count; i++) {
-                    g->rooms[k].monsters[i].type = 1+rand()%5; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].room = k;
+                    g->rooms[k].monsters[i].type = 1+rand()%5; g->rooms[k].monsters[i].alive = 1; g->rooms[k].monsters[i].on = 0; g->rooms[k].monsters[i].freeze = 0; g->rooms[k].monsters[i].room = k;
                     if(g->rooms[k].monsters[i].type == 1) {g->rooms[k].monsters[i].radius = 1; g->rooms[k].monsters[i].health = 5; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 0;}
                     else if(g->rooms[k].monsters[i].type == 2) {g->rooms[k].monsters[i].radius = 3; g->rooms[k].monsters[i].health = 10; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 3;}
                     else if(g->rooms[k].monsters[i].type == 3) {g->rooms[k].monsters[i].radius = 4; g->rooms[k].monsters[i].health = 15; g->rooms[k].monsters[i].damage = 1; g->rooms[k].monsters[i].haunt = 5;}
@@ -1132,6 +1250,15 @@ void floor_generator(Player *p, Game *g) {
             g->rooms[k].gold = 0;
             g->rooms[k].dark_gold = 10;
             g->rooms[k].ordinary_food = 0;
+        }
+        else if(g->rooms[k].type == 2) {
+            g->rooms[k].pillar_seed.x = g->rooms[k].room_pos.x + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_h-3));
+            g->rooms[k].pillar_seed.y = g->rooms[k].room_pos.y + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_v-3));
+            g->rooms[k].traps_count = 0;
+            g->rooms[k].gold = 1 + rand()%4;
+            g->rooms[k].dark_gold = rand()%2 * rand()%2 * rand()%2;
+            g->rooms[k].ordinary_food = 1 + rand()%2;
+            g->rooms[k].potion = rand()%2;
         }
         else {
             g->rooms[k].pillar_seed.x = g->rooms[k].room_pos.x + power(-1,rand()%2)*(rand()%(g->rooms[k].room_size_h-3));
@@ -1166,7 +1293,7 @@ void floor_generator(Player *p, Game *g) {
         }
     }
 
-    int k_stair_1; do { k_stair_1 = rand()%6; } while(k_stair_1 == check_room(g->rooms,g->player_pos.x,g->player_pos.y)); int k_stair_2 = rand()%6; g->k_lock = rand()%6; g->rooms[g->k_lock].locked = 1; g->rooms[g->k_lock].password = password(); int k_ancient_key = rand()%6;  int k_secret_door_1 = rand()%6; int k_secret_door_2 = rand()%6; g->secret_doors_count = 0;
+    int k_stair_1; do { k_stair_1 = rand()%6; } while(k_stair_1 == check_room(g->rooms,g->player_pos.x,g->player_pos.y) || g->rooms[k_stair_1].type == 2); int k_stair_2 = rand()%6; do { g->k_lock = rand()%6; } while(g->rooms[g->k_lock].type == 2); g->rooms[g->k_lock].locked = 1; g->rooms[g->k_lock].password = password(); int k_ancient_key = rand()%6;  int k_secret_door_1 = rand()%6; int k_secret_door_2 = rand()%6; g->secret_doors_count = 0;
     int k_dagger = rand()%6; int k_magic_wand = rand()%6; int k_arrow = rand()%6; int k_sword = rand()%6;
     for(int k=0; k<6; k++) {
         if(g->rooms[k].type == 1) {
@@ -1309,7 +1436,7 @@ void floor_generator(Player *p, Game *g) {
                                 stairs++;
                             }
                         }
-                        if(k == k_secret_door_1 || k == k_secret_door_2) {
+                        if((k == k_secret_door_1 || k == k_secret_door_2) && g->rooms[k].type != 2) {
                             if(rand()%((g->rooms[k].room_size_h*g->rooms[k].room_size_v)) == 0 && (mvinch(j,i) & A_CHARTEXT) == '.' && secret_door<1) {
                                 g->secret_doors[g->secret_doors_count].x = i; g->secret_doors[g->secret_doors_count].y = j;
                                 secret_door++;
@@ -1503,6 +1630,32 @@ void floor_generator(Player *p, Game *g) {
                 }
             }
         }
+
+        if(g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].type == 2) {
+            short red, green, blue;
+            color_content(COLOR_WHITE, &red, &green, &blue);
+            init_color(COLOR_WHITE, 0, 128 * 1000 / 255, 128 * 1000 / 255); // Teal
+            play_music("TheDeathWaltz.mp3");
+            strcpy(message, "You're now in the nightmare room!");
+            while(g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].type == 2) {
+                clear();
+                display_message(g, g->floor_number, g->players_score, g->players_gold);
+                display_health(g);
+
+                display_screen(g,"nightmare",visited,screen);
+
+                attron(COLOR_PAIR(g->player_color));
+                mvprintw(g->player_pos.y, g->player_pos.x, "@");
+                attroff(COLOR_PAIR(g->player_color));
+
+                int ch = getch();
+                handle_movement(screen, visited, ch, g);
+            }
+            init_color(COLOR_WHITE, red, green, blue);
+            stop_music();
+            clear();
+        }
+
         switch(handle_movement(screen, visited, ch, g)) {
             case 1:
                 g->floor_number += 1;
@@ -1657,6 +1810,7 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
     switch (ch) {
         case '8':
             character = mvinch(g->player_pos.y-g->players_speed, g->player_pos.x) & A_CHARTEXT;
+            if(g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].type == 2 && character != '.' && character != '+' && character != '#'  && character != '-' && character != '|' && character != 'O') {character = '.';}
             g->players_steps += 1;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
@@ -1687,6 +1841,7 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             break;
         case '2':
             character = mvinch(g->player_pos.y+g->players_speed, g->player_pos.x) & A_CHARTEXT;
+            if(g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].type == 2 && character != '.' && character != '+' && character != '#'  && character != '-' && character != '|' && character != 'O') {character = '.';}
             g->players_steps += 1;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
@@ -1717,6 +1872,7 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             break;
         case '4':
             character = mvinch(g->player_pos.y, g->player_pos.x-g->players_speed) & A_CHARTEXT;
+            if(g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].type == 2 && character != '.' && character != '+' && character != '#'  && character != '-' && character != '|' && character != 'O') {character = '.';}
             g->players_steps += 1;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
@@ -1746,6 +1902,7 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             break;
         case '6':
             character = mvinch(g->player_pos.y, g->player_pos.x+g->players_speed) & A_CHARTEXT;
+            if(g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].type == 2 && character != '.' && character != '+' && character != '#'  && character != '-' && character != '|' && character != 'O') {character = '.';}
             g->players_steps += 1;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
@@ -1775,6 +1932,7 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             break;
         case '9':
             character = mvinch(g->player_pos.y-g->players_speed, g->player_pos.x+g->players_speed) & A_CHARTEXT;
+            if(g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].type == 2 && character != '.' && character != '+' && character != '#'  && character != '-' && character != '|' && character != 'O') {character = '.';}
             g->players_steps += 1;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
@@ -1805,6 +1963,7 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             break;
         case '7':
             character = mvinch(g->player_pos.y-g->players_speed, g->player_pos.x-g->players_speed) & A_CHARTEXT;
+            if(g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].type == 2 && character != '.' && character != '+' && character != '#'  && character != '-' && character != '|' && character != 'O') {character = '.';}
             g->players_steps += 1;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
@@ -1835,6 +1994,7 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             break;
         case '3':
             character = mvinch(g->player_pos.y+g->players_speed, g->player_pos.x+g->players_speed) & A_CHARTEXT;
+            if(g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].type == 2 && character != '.' && character != '+' && character != '#'  && character != '-' && character != '|' && character != 'O') {character = '.';}
             g->players_steps += 1;
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
@@ -1865,7 +2025,9 @@ int handle_movement(chtype **screen, int **visited, int ch, Game *g) {
             break;
         case '1':
             character = mvinch(g->player_pos.y+g->players_speed, g->player_pos.x-g->players_speed) & A_CHARTEXT;
+            if(g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].type == 2 && character != '.' && character != '+' && character != '#'  && character != '-' && character != '|' && character != 'O') {character = '.';}
             g->players_steps += 1;
+            if(g->rooms[check_room(g->rooms, g->player_pos.x, g->player_pos.y)].type == 2) { return 7; }
             if(character == '<') { return 1; }
             if(character == '_') { return 4; }
             if(character == 'o') { g->players_gold += 5; g->players_score +=10; screen[g->player_pos.x-g->players_speed][g->player_pos.y+g->players_speed]='.'; g->player_pos.y += g->players_speed; g->player_pos.x -= g->players_speed; return 0; }
@@ -2098,12 +2260,21 @@ void display_screen(Game *g, char mode[], int **visited, chtype **screen) {
                         continue;
                     }
                     if(g->rooms[check_room(g->rooms, i, j)].type == 1 && (screen[i][j] & A_CHARTEXT) == '.') {attron(COLOR_PAIR(4));}
+                    else if(g->rooms[check_room(g->rooms, i, j)].type == 1 && ((screen[i][j] & A_CHARTEXT) == '|' || (screen[i][j] & A_CHARTEXT) == '-' || (screen[i][j] & A_CHARTEXT) == '_' || (screen[i][j] & A_CHARTEXT) == ')' || (screen[i][j] & A_CHARTEXT) == '(')) {attron(COLOR_PAIR(5));}
                     mvaddch(j,i,screen[i][j]);
                     if(g->rooms[check_room(g->rooms, i, j)].type == 1 && (screen[i][j] & A_CHARTEXT) == '.') {attroff(COLOR_PAIR(4));}
+                    else if(g->rooms[check_room(g->rooms, i, j)].type == 1 && ((screen[i][j] & A_CHARTEXT) == '|' || (screen[i][j] & A_CHARTEXT) == '-' || (screen[i][j] & A_CHARTEXT) == '_' || (screen[i][j] & A_CHARTEXT) == ')' || (screen[i][j] & A_CHARTEXT) == '(')) {attroff(COLOR_PAIR(5));}
                 }
                 else {
                     mvprintw(j,i," ");
                 }
+            }
+        }
+    }
+    else if(strcmp(mode,"nightmare") == 0) {
+        for(int j=g->player_pos.y-2; j<=g->player_pos.y+2; j++) {
+            for(int i=g->player_pos.x-2; i<=g->player_pos.x+2; i++) {
+                mvprintw(j,i,"%c",screen[i][j]);
             }
         }
     }
@@ -2191,8 +2362,10 @@ void display_screen(Game *g, char mode[], int **visited, chtype **screen) {
                     continue;
                 }
                 if(g->rooms[check_room(g->rooms, i, j)].type == 1 && (screen[i][j] & A_CHARTEXT) == '.') {attron(COLOR_PAIR(4));}
-                    mvaddch(j,i,screen[i][j]);
-                    if(g->rooms[check_room(g->rooms, i, j)].type == 1 && (screen[i][j] & A_CHARTEXT) == '.') {attroff(COLOR_PAIR(4));}
+                else if(g->rooms[check_room(g->rooms, i, j)].type == 1 && ((screen[i][j] & A_CHARTEXT) == '|' || (screen[i][j] & A_CHARTEXT) == '-' || (screen[i][j] & A_CHARTEXT) == '_' || (screen[i][j] & A_CHARTEXT) == ')' || (screen[i][j] & A_CHARTEXT) == '(')) {attron(COLOR_PAIR(5));}
+                mvaddch(j,i,screen[i][j]);
+                if(g->rooms[check_room(g->rooms, i, j)].type == 1 && (screen[i][j] & A_CHARTEXT) == '.') {attroff(COLOR_PAIR(4));}
+                else if(g->rooms[check_room(g->rooms, i, j)].type == 1 && ((screen[i][j] & A_CHARTEXT) == '|' || (screen[i][j] & A_CHARTEXT) == '-' || (screen[i][j] & A_CHARTEXT) == '_' || (screen[i][j] & A_CHARTEXT) == ')' || (screen[i][j] & A_CHARTEXT) == '(')) {attroff(COLOR_PAIR(5));}
             }
         }
     }   
@@ -2947,7 +3120,7 @@ void handle_movement_monsters(Game *g, chtype **screen) {
         for(int m=0; m<g->rooms[k].monsters_count; m++) {
             int delta_x;
             int delta_y;
-            if(g->rooms[k].monsters[m].alive && g->rooms[k].monsters[m].on) {
+            if(g->rooms[k].monsters[m].alive && g->rooms[k].monsters[m].on && !g->rooms[k].monsters[m].freeze) {
                 if(g->rooms[k].monsters[m].haunt < 0) {
                     if(g->rooms[k].monsters[m].type == 1) {
                         g->rooms[k].monsters[m].on = 0;
@@ -3203,7 +3376,7 @@ void shoot_weapon(Game *g, char ch, chtype **screen) {
             for(int m=0; m<g->rooms[k].monsters_count; m++) {
                 if(g->rooms[k].monsters[m].position.x == i && g->rooms[k].monsters[m].position.y == j && g->rooms[k].monsters[m].alive) {
                     if(g->players_weapon == 2) {g->players_dagger -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*12;}
-                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*15;}
+                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*15; g->rooms[k].monsters[m].freeze = 1;}
                     else if(g->players_weapon == 4) {g->players_arrow -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*5;}
                     int type = check_monsters(g, i, j);
                     if(type == 1) {strcpy(message, "You scored an excellent hit on Daemon"); g->players_score += 5;}
@@ -3236,7 +3409,7 @@ void shoot_weapon(Game *g, char ch, chtype **screen) {
             for(int m=0; m<g->rooms[k].monsters_count; m++) {
                 if(g->rooms[k].monsters[m].position.x == i && g->rooms[k].monsters[m].position.y == j && g->rooms[k].monsters[m].alive) {
                     if(g->players_weapon == 2) {g->players_dagger -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*12;}
-                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*15;}
+                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*15; g->rooms[k].monsters[m].freeze = 1;}
                     else if(g->players_weapon == 4) {g->players_arrow -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*5;}
                     int type = check_monsters(g, i, j);
                     if(type == 1) {strcpy(message, "You scored an excellent hit on Daemon"); g->players_score += 5;}
@@ -3269,7 +3442,7 @@ void shoot_weapon(Game *g, char ch, chtype **screen) {
             for(int m=0; m<g->rooms[k].monsters_count; m++) {
                 if(g->rooms[k].monsters[m].position.x == i && g->rooms[k].monsters[m].position.y == j && g->rooms[k].monsters[m].alive) {
                     if(g->players_weapon == 2) {g->players_dagger -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*12;}
-                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*15;}
+                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*15; g->rooms[k].monsters[m].freeze = 1;}
                     else if(g->players_weapon == 4) {g->players_arrow -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*5;}
                     int type = check_monsters(g, i, j);
                     if(type == 1) {strcpy(message, "You scored an excellent hit on Daemon"); g->players_score += 5;}
@@ -3302,7 +3475,7 @@ void shoot_weapon(Game *g, char ch, chtype **screen) {
             for(int m=0; m<g->rooms[k].monsters_count; m++) {
                 if(g->rooms[k].monsters[m].position.x == i && g->rooms[k].monsters[m].position.y == j && g->rooms[k].monsters[m].alive) {
                     if(g->players_weapon == 2) {g->players_dagger -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*12;}
-                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*15;}
+                    else if(g->players_weapon == 3) {g->players_magic_wand -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*15; g->rooms[k].monsters[m].freeze = 1;}
                     else if(g->players_weapon == 4) {g->players_arrow -= 1; g->rooms[k].monsters[m].health -= g->players_damage_rate*5;}
                     int type = check_monsters(g, i, j);
                     if(type == 1) {strcpy(message, "You scored an excellent hit on Daemon"); g->players_score += 5;}
@@ -3351,7 +3524,7 @@ void battle_room(char mode[], Player *p, Game *g) {
         g->rooms[0].monsters_count = 4 + rand()%2;
         gold = 3 + rand()%4;
         food = 3 + rand()%2;
-        if(g->play_music) {play_music("Sucker.mp3");}
+        if(g->play_music) {play_music("thefinaldream.mp3");}
     }
     else if(strcmp(mode, "treasure") == 0) {
         strcpy(message, "You're now in the treasure room!");
@@ -3364,7 +3537,7 @@ void battle_room(char mode[], Player *p, Game *g) {
     
     for(int i=0; i<g->rooms[0].monsters_count; i++) {
         if(strcmp(mode, "trap") == 0) {g->rooms[0].monsters[i].type = 1+rand()%3;} else if(strcmp(mode, "treasure") == 0) {g->rooms[0].monsters[i].type = 1+rand()%5;}
-        g->rooms[0].monsters[i].alive = 1; g->rooms[0].monsters[i].on = 0; g->rooms[0].monsters[i].room = 0;
+        g->rooms[0].monsters[i].alive = 1; g->rooms[0].monsters[i].on = 0; g->rooms[0].monsters[i].freeze = 0; g->rooms[0].monsters[i].room = 0;
         if(g->rooms[0].monsters[i].type == 1) {g->rooms[0].monsters[i].radius = 1; g->rooms[0].monsters[i].health = 5; g->rooms[0].monsters[i].damage = 1; g->rooms[0].monsters[i].haunt = 0;}
         else if(g->rooms[0].monsters[i].type == 2) {g->rooms[0].monsters[i].radius = 3; g->rooms[0].monsters[i].health = 10; g->rooms[0].monsters[i].damage = 1; g->rooms[0].monsters[i].haunt = 3;}
         else if(g->rooms[0].monsters[i].type == 3) {g->rooms[0].monsters[i].radius = 4; g->rooms[0].monsters[i].health = 15; g->rooms[0].monsters[i].damage = 1; g->rooms[0].monsters[i].haunt = 5;}
